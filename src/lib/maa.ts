@@ -1,5 +1,3 @@
-import type { FamilyPattern, MAAResult } from './types-maa';
-
 export interface FamilyPattern {
   patientId: string;
   baselineFrequency: number;
