@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { users, patients, sessions, messages, conversations, maaAlerts, notifications, exercises, exercisePlans, milestones, weeklyAdherence, dailySessions } from '@/lib/mockData';
-import type { User, Patient, Session, Message, Conversation, MAAAlert, Notification, Exercise, ExercisePlan, Milestone } from '@/lib/types';
+import { users, patients, sessions, messages, conversations, maaAlerts, notifications, exercises, exercisePlans, milestones, weeklyAdherence, dailySessions, medals, moodEntries } from '@/lib/mockData';
+import type { User, Patient, Session, Message, Conversation, MAAAlert, Notification, Exercise, ExercisePlan, Milestone, Medal, MoodEntry } from '@/lib/types';
 
 interface AppState {
   // Auth
@@ -21,6 +21,8 @@ interface AppState {
   notifications: Notification[];
   exercisePlans: ExercisePlan[];
   milestones: Milestone[];
+  medals: Medal[];
+  moodEntries: MoodEntry[];
   weeklyAdherence: { week: string; adherence: number }[];
   dailySessions: { day: string; sessions: number }[];
 
@@ -28,7 +30,7 @@ interface AppState {
   todaySessionCompleted: boolean;
   todayDifficulty: number | null;
   todayNote: string;
-  completeTodaySession: (difficulty: number, note: string) => void;
+  completeTodaySession: (difficulty: number, note: string, mood?: number, painReported?: boolean) => void;
 
   // Messages
   sendMessage: (conversationId: string, text: string) => void;
@@ -39,6 +41,22 @@ interface AppState {
   
   // Alerts
   dismissAlert: (id: string) => void;
+
+  // Mood
+  addMoodEntry: (entry: Omit<MoodEntry, 'id'>) => void;
+
+  // Medals
+  unlockMedal: (medalId: string) => void;
+
+  // Settings
+  settings: {
+    dailyReminder: boolean;
+    therapistMessages: boolean;
+    weeklyReports: boolean;
+    soundEffects: boolean;
+    language: string;
+  };
+  updateSettings: (key: string, value: boolean | string) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -70,6 +88,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   notifications,
   exercisePlans,
   milestones,
+  medals,
+  moodEntries,
   weeklyAdherence,
   dailySessions,
 
@@ -77,7 +97,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   todayDifficulty: null,
   todayNote: '',
 
-  completeTodaySession: (difficulty: number, note: string) => {
+  completeTodaySession: (difficulty: number, note: string, mood?: number, painReported?: boolean) => {
+    const timeOfDay = new Date().getHours() < 12 ? 'morning' as const : new Date().getHours() < 18 ? 'afternoon' as const : 'evening' as const;
     const newSession: Session = {
       id: `sess-new-${Date.now()}`,
       patientId: 'pat-1',
@@ -87,6 +108,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       durationMinutes: 22,
       difficulty,
       note: note || undefined,
+      mood: mood || 3,
+      painReported: painReported || false,
+      timeOfDay,
     };
     set(state => ({
       todaySessionCompleted: true,
@@ -130,6 +154,31 @@ export const useAppStore = create<AppState>((set, get) => ({
   dismissAlert: (id) => {
     set(state => ({
       maaAlerts: state.maaAlerts.map(a => a.id === id ? { ...a, isActive: false } : a),
+    }));
+  },
+
+  addMoodEntry: (entry) => {
+    const newEntry: MoodEntry = { ...entry, id: `mood-${Date.now()}` };
+    set(state => ({ moodEntries: [...state.moodEntries, newEntry] }));
+  },
+
+  unlockMedal: (medalId) => {
+    set(state => ({
+      medals: state.medals.map(m => m.id === medalId ? { ...m, earned: true, earnedDate: new Date().toISOString().split('T')[0] } : m),
+    }));
+  },
+
+  settings: {
+    dailyReminder: true,
+    therapistMessages: true,
+    weeklyReports: false,
+    soundEffects: true,
+    language: 'es',
+  },
+
+  updateSettings: (key, value) => {
+    set(state => ({
+      settings: { ...state.settings, [key]: value },
     }));
   },
 }));
