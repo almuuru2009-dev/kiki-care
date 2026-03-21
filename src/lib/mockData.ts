@@ -1,6 +1,5 @@
 import { format, subDays, subWeeks } from 'date-fns';
-import { es } from 'date-fns/locale';
-import type { User, Patient, Exercise, Session, Message, Conversation, MAAAlert, ExercisePlan, Notification, Milestone } from './types';
+import type { User, Patient, Exercise, Session, Message, Conversation, MAAAlert, ExercisePlan, Notification, Milestone, Medal, MoodEntry } from './types';
 
 const today = new Date();
 
@@ -56,13 +55,13 @@ export const exercises: Exercise[] = [
 function generateSessions(): Session[] {
   const sessions: Session[] = [];
   let id = 1;
+  const timeSlots: Array<'morning' | 'afternoon' | 'evening'> = ['morning', 'afternoon', 'evening'];
   for (let i = 29; i >= 0; i--) {
     const date = subDays(today, i);
     const dayOfWeek = date.getDay();
-    // Skip some weekend days and occasional weekdays
-    if (dayOfWeek === 0) continue; // Skip Sundays
+    if (dayOfWeek === 0) continue;
     if (dayOfWeek === 6 && Math.random() > 0.4) continue;
-    if (Math.random() > 0.75) continue; // ~25% chance of missing
+    if (Math.random() > 0.75) continue;
 
     sessions.push({
       id: `sess-${id++}`,
@@ -73,6 +72,9 @@ function generateSessions(): Session[] {
       durationMinutes: Math.floor(18 + Math.random() * 10),
       difficulty: Math.floor(1 + Math.random() * 5),
       note: i < 5 ? ['Valentín estuvo cansado hoy', 'Muy bien, cooperó mucho', 'Le dolía un poco la rodilla', ''][Math.floor(Math.random() * 4)] || undefined : undefined,
+      mood: Math.floor(2 + Math.random() * 4),
+      painReported: Math.random() > 0.8,
+      timeOfDay: timeSlots[Math.floor(Math.random() * 3)],
     });
   }
   return sessions;
@@ -121,6 +123,32 @@ export const milestones: Milestone[] = [
   { id: 'ms-2', patientId: 'pat-1', title: '5 días seguidos', date: format(subWeeks(today, 3), 'yyyy-MM-dd'), achieved: true },
   { id: 'ms-3', patientId: 'pat-1', title: '20 sesiones completadas', date: format(subWeeks(today, 1), 'yyyy-MM-dd'), achieved: true },
   { id: 'ms-4', patientId: 'pat-1', title: '30 sesiones completadas', achieved: false },
+];
+
+export const medals: Medal[] = [
+  // Earned
+  { id: 'med-1', patientId: 'pat-1', title: 'Primer Paso', description: '¡Completaste tu primera sesión!', icon: '🐣', category: 'milestone', earnedDate: format(subWeeks(today, 8), 'yyyy-MM-dd'), earned: true, requirement: 'Completar 1 sesión' },
+  { id: 'med-2', patientId: 'pat-1', title: 'Guerrero de 3', description: '3 días seguidos sin parar', icon: '🔥', category: 'streak', earnedDate: format(subWeeks(today, 5), 'yyyy-MM-dd'), earned: true, requirement: '3 días consecutivos' },
+  { id: 'med-3', patientId: 'pat-1', title: 'Semana Perfecta', description: '¡5 sesiones en una semana!', icon: '⭐', category: 'consistency', earnedDate: format(subWeeks(today, 4), 'yyyy-MM-dd'), earned: true, requirement: '5 sesiones en 1 semana' },
+  { id: 'med-4', patientId: 'pat-1', title: 'Héroe de la Constancia', description: '¡10 sesiones completadas!', icon: '🏅', category: 'milestone', earnedDate: format(subWeeks(today, 4), 'yyyy-MM-dd'), earned: true, requirement: 'Completar 10 sesiones' },
+  { id: 'med-5', patientId: 'pat-1', title: 'Racha Imparable', description: '5 días seguidos de ejercicios', icon: '💪', category: 'streak', earnedDate: format(subWeeks(today, 3), 'yyyy-MM-dd'), earned: true, requirement: '5 días consecutivos' },
+  { id: 'med-6', patientId: 'pat-1', title: 'Campeón de 20', description: '¡20 sesiones y contando!', icon: '🏆', category: 'milestone', earnedDate: format(subWeeks(today, 1), 'yyyy-MM-dd'), earned: true, requirement: 'Completar 20 sesiones' },
+  { id: 'med-7', patientId: 'pat-1', title: 'Buena Onda', description: 'Sesión con ánimo excelente', icon: '😄', category: 'effort', earnedDate: format(subDays(today, 5), 'yyyy-MM-dd'), earned: true, requirement: 'Reportar ánimo 5/5 en una sesión' },
+  // In progress
+  { id: 'med-8', patientId: 'pat-1', title: 'Racha de Fuego', description: '7 días seguidos sin parar', icon: '🌟', category: 'streak', earned: false, progress: 43, requirement: '7 días consecutivos' },
+  { id: 'med-9', patientId: 'pat-1', title: 'Leyenda de 30', description: '30 sesiones completadas', icon: '👑', category: 'milestone', earned: false, progress: 73, requirement: 'Completar 30 sesiones' },
+  { id: 'med-10', patientId: 'pat-1', title: 'Sin Dolor', description: '2 semanas sin reportar dolor', icon: '💚', category: 'effort', earned: false, progress: 60, requirement: '14 sesiones sin dolor reportado' },
+  { id: 'med-11', patientId: 'pat-1', title: 'Madrugador', description: '5 sesiones antes de las 10am', icon: '🌅', category: 'special', earned: false, progress: 40, requirement: '5 sesiones por la mañana' },
+  { id: 'med-12', patientId: 'pat-1', title: 'Comunicador', description: 'Enviar 5 notas al kinesiólogo', icon: '💬', category: 'special', earned: false, progress: 80, requirement: 'Escribir notas en 5 sesiones' },
+];
+
+export const moodEntries: MoodEntry[] = [
+  { id: 'mood-1', patientId: 'pat-1', date: format(subDays(today, 6), 'yyyy-MM-dd'), childMood: 4, caregiverEnergy: 3, painLevel: 0, cooperationLevel: 4 },
+  { id: 'mood-2', patientId: 'pat-1', date: format(subDays(today, 5), 'yyyy-MM-dd'), childMood: 3, caregiverEnergy: 2, painLevel: 1, cooperationLevel: 3, notes: 'Día complicado' },
+  { id: 'mood-3', patientId: 'pat-1', date: format(subDays(today, 4), 'yyyy-MM-dd'), childMood: 5, caregiverEnergy: 4, painLevel: 0, cooperationLevel: 5 },
+  { id: 'mood-4', patientId: 'pat-1', date: format(subDays(today, 3), 'yyyy-MM-dd'), childMood: 4, caregiverEnergy: 4, painLevel: 0, cooperationLevel: 4 },
+  { id: 'mood-5', patientId: 'pat-1', date: format(subDays(today, 2), 'yyyy-MM-dd'), childMood: 2, caregiverEnergy: 2, painLevel: 2, cooperationLevel: 2, notes: 'Le dolía la rodilla' },
+  { id: 'mood-6', patientId: 'pat-1', date: format(subDays(today, 1), 'yyyy-MM-dd'), childMood: 4, caregiverEnergy: 3, painLevel: 0, cooperationLevel: 4 },
 ];
 
 // Weekly adherence data for charts

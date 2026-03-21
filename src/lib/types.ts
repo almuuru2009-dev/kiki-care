@@ -54,6 +54,9 @@ export interface Session {
   durationMinutes: number;
   difficulty: number;
   note?: string;
+  mood?: number; // 1-5 mood of child during session
+  painReported?: boolean;
+  timeOfDay?: 'morning' | 'afternoon' | 'evening';
 }
 
 export interface Message {
@@ -119,4 +122,28 @@ export interface Milestone {
   title: string;
   date?: string;
   achieved: boolean;
+}
+
+export interface Medal {
+  id: string;
+  patientId: string;
+  title: string;
+  description: string;
+  icon: string; // emoji
+  category: 'streak' | 'consistency' | 'effort' | 'milestone' | 'special';
+  earnedDate?: string;
+  earned: boolean;
+  progress?: number; // 0-100 for unearned
+  requirement: string;
+}
+
+export interface MoodEntry {
+  id: string;
+  patientId: string;
+  date: string;
+  childMood: number; // 1-5
+  caregiverEnergy: number; // 1-5
+  painLevel: number; // 0-3 (none, mild, moderate, severe)
+  cooperationLevel: number; // 1-5
+  notes?: string;
 }
