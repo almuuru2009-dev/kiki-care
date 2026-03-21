@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Home, Users, Bell, MessageCircle, User, TrendingUp, Heart } from 'lucide-react';
+import { Home, Users, Bell, MessageCircle, User, TrendingUp, Trophy } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import { cn } from '@/lib/utils';
 
