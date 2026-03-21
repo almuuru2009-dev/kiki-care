@@ -22,6 +22,7 @@ import SessionPlayer from "./pages/cuidadora/SessionPlayer";
 import ProgressScreen from "./pages/cuidadora/ProgressScreen";
 import CuidadoraMessages from "./pages/cuidadora/CuidadoraMessages";
 import ChildProfile from "./pages/cuidadora/ChildProfile";
+import MedalsScreen from "./pages/cuidadora/MedalsScreen";
 
 import NotFound from "./pages/NotFound";
 
