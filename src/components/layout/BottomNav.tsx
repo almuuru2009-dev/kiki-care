@@ -18,9 +18,10 @@ const kineItems = [
 
 const caregiverItems = [
   { icon: Home, label: 'Hoy', path: '/cuidadora/home' },
+  { icon: Trophy, label: 'Medallas', path: '/cuidadora/medals' },
   { icon: TrendingUp, label: 'Progreso', path: '/cuidadora/progress' },
   { icon: MessageCircle, label: 'Mensajes', path: '/cuidadora/messages' },
-  { icon: Heart, label: 'Valentín', path: '/cuidadora/child' },
+  { icon: User, label: 'Perfil', path: '/cuidadora/child' },
 ];
 
 export function BottomNav({ role, currentPath }: BottomNavProps) {

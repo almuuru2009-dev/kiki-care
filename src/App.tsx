@@ -57,6 +57,7 @@ const App = () => (
             <Route path="/cuidadora/messages" element={<CuidadoraMessages />} />
             <Route path="/cuidadora/messages/conversation" element={<ConversationScreen />} />
             <Route path="/cuidadora/child" element={<ChildProfile />} />
+            <Route path="/cuidadora/medals" element={<MedalsScreen />} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>
