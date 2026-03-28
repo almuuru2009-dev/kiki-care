@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Check } from 'lucide-react';
+import { useAppStore } from '@/stores/useAppStore';
 
 export default function RegisterScreen() {
   const navigate = useNavigate();
+  const { selectedRole } = useAppStore();
   const [step, setStep] = useState(1);
-  const [role, setRole] = useState<'kinesiologist' | 'caregiver'>('caregiver');
+  const [role, setRole] = useState<'kinesiologist' | 'caregiver'>(selectedRole || 'caregiver');
   const [formData, setFormData] = useState({
     name: '', email: '', password: '', confirmPassword: '',
     specialty: '', institution: '', matricula: '',

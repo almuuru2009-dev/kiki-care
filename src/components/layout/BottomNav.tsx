@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Home, Users, Bell, MessageCircle, User, TrendingUp, Trophy } from 'lucide-react';
+import { Home, Users, MessageCircle, User, TrendingUp, Trophy } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import { cn } from '@/lib/utils';
 
@@ -11,7 +11,6 @@ interface BottomNavProps {
 const kineItems = [
   { icon: Home, label: 'Inicio', path: '/kine/home' },
   { icon: Users, label: 'Pacientes', path: '/kine/patients' },
-  { icon: Bell, label: 'Alertas', path: '/kine/alerts' },
   { icon: MessageCircle, label: 'Mensajes', path: '/kine/messages' },
   { icon: User, label: 'Perfil', path: '/kine/profile' },
 ];
@@ -26,10 +25,9 @@ const caregiverItems = [
 
 export function BottomNav({ role, currentPath }: BottomNavProps) {
   const navigate = useNavigate();
-  const { maaAlerts, conversations } = useAppStore();
+  const { conversations } = useAppStore();
 
   const items = role === 'kinesiologist' ? kineItems : caregiverItems;
-  const activeAlerts = maaAlerts.filter(a => a.isActive).length;
   const unreadMessages = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
   return (
@@ -39,7 +37,6 @@ export function BottomNav({ role, currentPath }: BottomNavProps) {
           const isActive = currentPath.startsWith(item.path);
           const Icon = item.icon;
           let badge = 0;
-          if (item.label === 'Alertas') badge = activeAlerts;
           if (item.label === 'Mensajes') badge = unreadMessages;
 
           return (

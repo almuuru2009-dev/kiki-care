@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, ChevronRight, Bell, Globe, Shield, HelpCircle, Volume2, VolumeX, Settings, Users } from 'lucide-react';
+import { LogOut, ChevronRight, Bell, Globe, Shield, HelpCircle, Volume2, VolumeX, Users, BookOpen, Lock } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
 import { useAppStore } from '@/stores/useAppStore';
@@ -57,6 +57,38 @@ export default function KineProfile() {
                 <span className="text-sm font-medium text-foreground truncate ml-4 text-right">{item.value}</span>
               </div>
             ))}
+          </KikiCard>
+        </motion.div>
+
+        {/* Change password */}
+        <motion.div variants={stagger.item}>
+          <KikiCard onClick={() => navigate('/change-password')}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+                <Lock size={18} className="text-gold" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium">Cambiar contraseña</p>
+                <p className="text-xs text-muted-foreground">Actualizá tu contraseña de acceso</p>
+              </div>
+              <ChevronRight size={16} className="text-muted-foreground" />
+            </div>
+          </KikiCard>
+        </motion.div>
+
+        {/* Exercise Library */}
+        <motion.div variants={stagger.item}>
+          <KikiCard onClick={() => navigate('/kine/exercises')}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                <BookOpen size={18} className="text-blue-brand" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium">Biblioteca de actividades</p>
+                <p className="text-xs text-muted-foreground">Ejercicios, protocolos y comunidad</p>
+              </div>
+              <ChevronRight size={16} className="text-muted-foreground" />
+            </div>
           </KikiCard>
         </motion.div>
 
@@ -146,11 +178,11 @@ export default function KineProfile() {
         <motion.div variants={stagger.item}>
           <KikiCard>
             {[
-              { icon: HelpCircle, label: 'Ayuda' },
-              { icon: Shield, label: 'Términos y condiciones' },
-              { icon: Globe, label: 'Política de privacidad' },
+              { icon: HelpCircle, label: 'Ayuda', path: '/faq' },
+              { icon: Shield, label: 'Términos y condiciones', path: '/terms' },
+              { icon: Globe, label: 'Política de privacidad', path: '/privacy' },
             ].map(item => (
-              <div key={item.label} className="flex items-center justify-between py-2.5 border-b border-border last:border-0">
+              <div key={item.label} onClick={() => navigate(item.path)} className="flex items-center justify-between py-2.5 border-b border-border last:border-0 cursor-pointer">
                 <div className="flex items-center gap-2">
                   <item.icon size={16} className="text-muted-foreground" />
                   <span className="text-sm">{item.label}</span>

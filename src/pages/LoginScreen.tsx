@@ -115,7 +115,11 @@ export default function LoginScreen() {
             {loading ? 'Ingresando...' : 'Ingresar'}
           </button>
 
-          <button type="button" className="btn-ghost w-full text-center text-sm">
+          <button
+            type="button"
+            onClick={() => navigate('/forgot-password')}
+            className="btn-ghost w-full text-center text-sm"
+          >
             Olvidé mi contraseña
           </button>
         </form>
