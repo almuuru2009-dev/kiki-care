@@ -6,18 +6,20 @@ import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle, RiskBadge } from '@/components/kiki/KikiComponents';
 import { useAppStore } from '@/stores/useAppStore';
 import { useState } from 'react';
+import { MAAInfoModal } from './MAAInfoModal';
 
 export default function AlertsScreen() {
   const navigate = useNavigate();
   const { maaAlerts, dismissAlert } = useAppStore();
   const [showResolved, setShowResolved] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
 
   const activeAlerts = maaAlerts.filter(a => a.isActive);
   const resolvedAlerts = maaAlerts.filter(a => !a.isActive);
 
   return (
-    <AppShell>
-      <ScreenHeader title="Alertas MAA" rightAction={<Info size={20} className="text-muted-foreground" />} />
+    <AppShell hideNav>
+      <ScreenHeader title="Alertas MAA" backButton rightAction={<button onClick={() => setShowInfo(true)} aria-label="Info MAA"><Info size={20} className="text-muted-foreground" /></button>} />
 
       <div className="px-4 pb-6">
         {/* Info banner */}
@@ -54,12 +56,47 @@ export default function AlertsScreen() {
                       </div>
                       <p className="text-xs text-muted-foreground">{alert.patientAge} años · {alert.alertType}</p>
                     </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-foreground">{alert.riskScore}</p>
+                      <p className="text-[9px] text-muted-foreground">puntos</p>
+                    </div>
                   </div>
 
                   <p className="text-sm text-foreground leading-relaxed mb-2">{alert.triggerReason}</p>
 
+                  {/* Additional indicators */}
+                  <div className="bg-muted/50 rounded-lg p-2.5 mb-3 space-y-1.5">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Indicadores detectados</p>
+                    {alert.alertType === 'Sin actividad' && (
+                      <>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Frecuencia actual</span><span className="font-medium text-rust">0 sesiones/sem</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Frecuencia base</span><span className="font-medium">5.2 sesiones/sem</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Latencia de respuesta</span><span className="font-medium text-rust">48 horas</span></div>
+                      </>
+                    )}
+                    {alert.alertType === 'Patrón irregular' && (
+                      <>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Duración actual</span><span className="font-medium text-rust">8 min promedio</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Duración habitual</span><span className="font-medium">22 min promedio</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Patrón horario</span><span className="font-medium text-gold">Cambió a nocturno</span></div>
+                      </>
+                    )}
+                    {alert.alertType === 'Adherencia en caída' && (
+                      <>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Adherencia hace 2 sem</span><span className="font-medium">72%</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Adherencia actual</span><span className="font-medium text-gold">61%</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Horario</span><span className="font-medium text-gold">Cambio detectado</span></div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="bg-blue-50 rounded-lg p-2.5 mb-3">
+                    <p className="text-[10px] font-semibold text-blue-brand mb-1">💡 Acción sugerida</p>
+                    <p className="text-xs text-foreground">{alert.suggestedAction}</p>
+                  </div>
+
                   <p className="text-xs text-muted-foreground mb-3">
-                    Detectado hace {Math.abs(new Date().getDate() - new Date(alert.detectedAt).getDate())} días
+                    Detectado hace {alert.detectedDaysBefore > 0 ? alert.detectedDaysBefore : Math.abs(new Date().getDate() - new Date(alert.detectedAt).getDate())} días · Abandono estimado en {alert.detectedDaysBefore} días
                   </p>
 
                   <div className="flex gap-2">
@@ -113,6 +150,8 @@ export default function AlertsScreen() {
           </div>
         )}
       </div>
+
+      <MAAInfoModal open={showInfo} onClose={() => setShowInfo(false)} />
     </AppShell>
   );
 }

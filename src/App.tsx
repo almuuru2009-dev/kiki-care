@@ -8,14 +8,23 @@ import SplashScreen from "./pages/SplashScreen";
 import RoleSelectScreen from "./pages/RoleSelectScreen";
 import LoginScreen from "./pages/LoginScreen";
 import RegisterScreen from "./pages/RegisterScreen";
+import ForgotPasswordScreen from "./pages/ForgotPasswordScreen";
+import ChangePasswordScreen from "./pages/ChangePasswordScreen";
+import FAQScreen from "./pages/FAQScreen";
+import TermsScreen from "./pages/TermsScreen";
+import PrivacyScreen from "./pages/PrivacyScreen";
 
 import KineHome from "./pages/kine/KineHome";
 import PatientList from "./pages/kine/PatientList";
 import PatientDetail from "./pages/kine/PatientDetail";
+import EditPlanScreen from "./pages/kine/EditPlanScreen";
 import AlertsScreen from "./pages/kine/AlertsScreen";
 import MessageList from "./pages/kine/MessageList";
 import ConversationScreen from "./pages/kine/ConversationScreen";
 import KineProfile from "./pages/kine/KineProfile";
+import ExerciseLibraryScreen from "./pages/kine/ExerciseLibraryScreen";
+import CreateExerciseScreen from "./pages/kine/CreateExerciseScreen";
+import CreateProtocolScreen from "./pages/kine/CreateProtocolScreen";
 
 import CuidadoraHome from "./pages/cuidadora/CuidadoraHome";
 import SessionPlayer from "./pages/cuidadora/SessionPlayer";
@@ -40,16 +49,24 @@ const App = () => (
             <Route path="/role-select" element={<RoleSelectScreen />} />
             <Route path="/login" element={<LoginScreen />} />
             <Route path="/register" element={<RegisterScreen />} />
+            <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
+            <Route path="/change-password" element={<ChangePasswordScreen />} />
+            <Route path="/faq" element={<FAQScreen />} />
+            <Route path="/terms" element={<TermsScreen />} />
+            <Route path="/privacy" element={<PrivacyScreen />} />
 
             <Route path="/kine/home" element={<KineHome />} />
             <Route path="/kine/patients" element={<PatientList />} />
             <Route path="/kine/patients/:id" element={<PatientDetail />} />
-            <Route path="/kine/patients/:id/plan/edit" element={<PatientDetail />} />
+            <Route path="/kine/patients/:id/plan/edit" element={<EditPlanScreen />} />
             <Route path="/kine/patients/:id/pre-report" element={<PatientDetail />} />
             <Route path="/kine/alerts" element={<AlertsScreen />} />
             <Route path="/kine/messages" element={<MessageList />} />
             <Route path="/kine/messages/:id" element={<ConversationScreen />} />
             <Route path="/kine/profile" element={<KineProfile />} />
+            <Route path="/kine/exercises" element={<ExerciseLibraryScreen />} />
+            <Route path="/kine/exercises/create" element={<CreateExerciseScreen />} />
+            <Route path="/kine/protocols/create" element={<CreateProtocolScreen />} />
 
             <Route path="/cuidadora/home" element={<CuidadoraHome />} />
             <Route path="/cuidadora/session" element={<SessionPlayer />} />
