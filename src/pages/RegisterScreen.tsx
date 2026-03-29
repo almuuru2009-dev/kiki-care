@@ -1,8 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Check } from 'lucide-react';
+import { ArrowLeft, Check, AlertCircle } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
+
+const passwordRules = [
+  { test: (p: string) => p.length >= 8, label: 'Mínimo 8 caracteres' },
+  { test: (p: string) => /[A-Z]/.test(p), label: 'Al menos una mayúscula' },
+  { test: (p: string) => /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(p), label: 'Al menos un carácter especial' },
+];
 
 export default function RegisterScreen() {
   const navigate = useNavigate();
@@ -14,16 +20,46 @@ export default function RegisterScreen() {
     specialty: '', institution: '', matricula: '',
     childName: '', childAge: '', childDiagnosis: '', gmfcs: '', therapistName: '',
   });
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [done, setDone] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    setErrors(prev => ({ ...prev, [field]: '' }));
+  };
+
+  const validateStep1 = () => {
+    const e: Record<string, string> = {};
+    if (!formData.name.trim()) e.name = 'Ingresá tu nombre';
+    if (!formData.email.trim()) e.email = 'Ingresá tu email';
+    if (!formData.password) {
+      e.password = 'Ingresá una contraseña';
+    } else {
+      const failedRules = passwordRules.filter(r => !r.test(formData.password));
+      if (failedRules.length > 0) e.password = failedRules.map(r => r.label).join('. ');
+    }
+    if (formData.password !== formData.confirmPassword) e.confirmPassword = 'Las contraseñas no coinciden';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const validateStep3 = () => {
+    const e: Record<string, string> = {};
+    if (!acceptTerms) e.terms = 'Debés aceptar los términos y condiciones';
+    if (!acceptPrivacy) e.privacy = 'Debés aceptar la política de privacidad';
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
   const handleFinish = () => {
+    if (!validateStep3()) return;
     setDone(true);
     setTimeout(() => navigate('/login'), 1500);
   };
+
+  const pwdValid = passwordRules.map(r => ({ ...r, pass: r.test(formData.password) }));
 
   return (
     <div className="mobile-frame flex flex-col min-h-screen bg-background">
@@ -53,7 +89,7 @@ export default function RegisterScreen() {
             <p className="text-sm text-muted-foreground mt-2">Redirigiendo al inicio de sesión...</p>
           </motion.div>
         ) : (
-          <motion.div key={step} className="flex-1 px-6 pt-6"
+          <motion.div key={step} className="flex-1 px-6 pt-6 overflow-y-auto pb-6"
             initial={{ x: 30, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -30, opacity: 0 }}
             transition={{ duration: 0.3 }}>
 
@@ -68,11 +104,33 @@ export default function RegisterScreen() {
                     </button>
                   ))}
                 </div>
-                <input className="input-kiki" placeholder="Nombre completo" value={formData.name} onChange={e => handleChange('name', e.target.value)} />
-                <input className="input-kiki" placeholder="Email" type="email" value={formData.email} onChange={e => handleChange('email', e.target.value)} />
-                <input className="input-kiki" placeholder="Contraseña" type="password" value={formData.password} onChange={e => handleChange('password', e.target.value)} />
-                <input className="input-kiki" placeholder="Confirmar contraseña" type="password" value={formData.confirmPassword} onChange={e => handleChange('confirmPassword', e.target.value)} />
-                <button onClick={() => setStep(2)} className="btn-primary w-full">Siguiente</button>
+                <div>
+                  <input className={`input-kiki ${errors.name ? 'border-rust' : ''}`} placeholder="Nombre completo" value={formData.name} onChange={e => handleChange('name', e.target.value)} />
+                  {errors.name && <p className="text-xs text-rust mt-1">{errors.name}</p>}
+                </div>
+                <div>
+                  <input className={`input-kiki ${errors.email ? 'border-rust' : ''}`} placeholder="Email" type="email" value={formData.email} onChange={e => handleChange('email', e.target.value)} />
+                  {errors.email && <p className="text-xs text-rust mt-1">{errors.email}</p>}
+                </div>
+                <div>
+                  <input className={`input-kiki ${errors.password ? 'border-rust' : ''}`} placeholder="Contraseña" type="password" value={formData.password} onChange={e => handleChange('password', e.target.value)} />
+                  {formData.password && (
+                    <div className="mt-2 space-y-1">
+                      {pwdValid.map((r, i) => (
+                        <div key={i} className={`flex items-center gap-1.5 text-xs ${r.pass ? 'text-mint-600' : 'text-rust'}`}>
+                          {r.pass ? <Check size={12} /> : <AlertCircle size={12} />}
+                          <span>{r.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {errors.password && !formData.password && <p className="text-xs text-rust mt-1">{errors.password}</p>}
+                </div>
+                <div>
+                  <input className={`input-kiki ${errors.confirmPassword ? 'border-rust' : ''}`} placeholder="Confirmar contraseña" type="password" value={formData.confirmPassword} onChange={e => handleChange('confirmPassword', e.target.value)} />
+                  {errors.confirmPassword && <p className="text-xs text-rust mt-1">{errors.confirmPassword}</p>}
+                </div>
+                <button onClick={() => { if (validateStep1()) setStep(2); }} className="btn-primary w-full">Siguiente</button>
               </div>
             )}
 
@@ -133,6 +191,34 @@ export default function RegisterScreen() {
                     </>
                   )}
                 </div>
+
+                {/* Terms & Privacy */}
+                <div className="space-y-3">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" checked={acceptTerms} onChange={e => { setAcceptTerms(e.target.checked); setErrors(prev => ({ ...prev, terms: '' })); }}
+                      className="mt-0.5 w-5 h-5 rounded border-2 border-border accent-mint" />
+                    <span className="text-sm text-foreground">
+                      Acepto los{' '}
+                      <button onClick={(e) => { e.preventDefault(); navigate('/terms'); }} className="text-mint-500 font-medium underline">
+                        Términos y Condiciones
+                      </button>
+                    </span>
+                  </label>
+                  {errors.terms && <p className="text-xs text-rust ml-8">{errors.terms}</p>}
+
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" checked={acceptPrivacy} onChange={e => { setAcceptPrivacy(e.target.checked); setErrors(prev => ({ ...prev, privacy: '' })); }}
+                      className="mt-0.5 w-5 h-5 rounded border-2 border-border accent-mint" />
+                    <span className="text-sm text-foreground">
+                      Acepto la{' '}
+                      <button onClick={(e) => { e.preventDefault(); navigate('/privacy'); }} className="text-mint-500 font-medium underline">
+                        Política de Privacidad
+                      </button>
+                    </span>
+                  </label>
+                  {errors.privacy && <p className="text-xs text-rust ml-8">{errors.privacy}</p>}
+                </div>
+
                 <button onClick={handleFinish} className="btn-primary w-full">Crear cuenta</button>
               </div>
             )}

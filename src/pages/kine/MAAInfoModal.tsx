@@ -19,22 +19,22 @@ export function MAAInfoModal({ open, onClose }: MAAInfoModalProps) {
             onClick={onClose}
           />
           <motion.div
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-[390px] bg-background rounded-t-2xl overflow-hidden"
+            className="fixed inset-x-0 bottom-0 top-12 z-50 mx-auto max-w-[390px] bg-background rounded-t-2xl overflow-hidden flex flex-col"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
           >
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-foreground">Motor de Adherencia Adaptativa</h2>
-                <button onClick={onClose} className="w-8 h-8 rounded-full bg-muted flex items-center justify-center" aria-label="Cerrar">
-                  <X size={18} />
-                </button>
-              </div>
+            <div className="flex items-center justify-between p-4 pb-2 shrink-0">
+              <h2 className="text-lg font-bold text-foreground">Motor de Adherencia Adaptativa</h2>
+              <button onClick={onClose} className="w-8 h-8 rounded-full bg-muted flex items-center justify-center" aria-label="Cerrar">
+                <X size={18} />
+              </button>
+            </div>
 
-              <div className="w-12 h-1 rounded-full bg-muted mx-auto mb-4" />
+            <div className="w-12 h-1 rounded-full bg-muted mx-auto mb-2 shrink-0" />
 
+            <div className="flex-1 overflow-y-auto px-4 pb-6">
               <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
                 El MAA es un sistema predictivo que analiza patrones de comportamiento de cada familia para detectar señales tempranas de abandono terapéutico, <span className="font-medium text-foreground">antes de que ocurra</span>.
               </p>
@@ -78,6 +78,16 @@ export function MAAInfoModal({ open, onClose }: MAAInfoModalProps) {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="space-y-2 mb-4">
+                <h3 className="text-sm font-semibold text-foreground">¿Cómo se calcula?</h3>
+                <div className="text-xs text-muted-foreground leading-relaxed space-y-2">
+                  <p>El puntaje de riesgo se calcula como una suma ponderada de las variables anteriores. Cada variable se normaliza a un rango de 0-100 y se multiplica por su peso correspondiente.</p>
+                  <p><span className="font-medium text-foreground">BAJO (≤35):</span> ≥70% sesiones completadas Y sin pausas mayores a 4 días.</p>
+                  <p><span className="font-medium text-foreground">MODERADO (36-65):</span> 40-69% completado O pausa de 5-7 días O aumento de dificultad ≥1.5 puntos.</p>
+                  <p><span className="font-medium text-foreground">ALTO (≥66):</span> &lt;40% completado O pausa ≥8 días O sin actividad en los últimos 7 días.</p>
+                </div>
               </div>
 
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex gap-2">
