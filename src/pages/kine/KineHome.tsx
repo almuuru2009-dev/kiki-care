@@ -72,7 +72,7 @@ export default function KineHome() {
             color="bg-mint-50"
           />
           <StatBadge
-            value="14"
+            value="2"
             label="Sesiones hoy"
             icon={<CalendarCheck size={16} className="text-mint-500" />}
             color="bg-blue-50"

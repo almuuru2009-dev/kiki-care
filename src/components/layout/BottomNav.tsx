@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Home, Users, MessageCircle, User, TrendingUp, Trophy } from 'lucide-react';
+import { Home, Users, MessageCircle, User, TrendingUp, Trophy, BookOpen } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import { cn } from '@/lib/utils';
 
@@ -12,11 +12,12 @@ const kineItems = [
   { icon: Home, label: 'Inicio', path: '/kine/home' },
   { icon: Users, label: 'Pacientes', path: '/kine/patients' },
   { icon: MessageCircle, label: 'Mensajes', path: '/kine/messages' },
+  { icon: BookOpen, label: 'Biblioteca', path: '/kine/exercises' },
   { icon: User, label: 'Perfil', path: '/kine/profile' },
 ];
 
 const caregiverItems = [
-  { icon: Home, label: 'Hoy', path: '/cuidadora/home' },
+  { icon: Home, label: 'Inicio', path: '/cuidadora/home' },
   { icon: Trophy, label: 'Medallas', path: '/cuidadora/medals' },
   { icon: TrendingUp, label: 'Progreso', path: '/cuidadora/progress' },
   { icon: MessageCircle, label: 'Mensajes', path: '/cuidadora/messages' },
@@ -44,20 +45,20 @@ export function BottomNav({ role, currentPath }: BottomNavProps) {
               key={item.path}
               onClick={() => navigate(item.path)}
               className={cn(
-                "flex flex-col items-center gap-0.5 px-3 py-1 transition-colors relative",
+                "flex flex-col items-center gap-0.5 px-2 py-1 transition-colors relative",
                 isActive ? "text-mint" : "text-navy-300 hover:text-mint-200"
               )}
               aria-label={item.label}
             >
               <div className="relative">
-                <Icon size={22} strokeWidth={isActive ? 2.5 : 1.8} />
+                <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} />
                 {badge > 0 && (
                   <span className="absolute -top-1.5 -right-2 w-[18px] h-[18px] rounded-full bg-rust text-[10px] font-semibold flex items-center justify-center text-background">
                     {badge}
                   </span>
                 )}
               </div>
-              <span className={cn("text-[10px]", isActive ? "font-semibold" : "font-medium")}>
+              <span className={cn("text-[9px]", isActive ? "font-semibold" : "font-medium")}>
                 {item.label}
               </span>
               {isActive && (

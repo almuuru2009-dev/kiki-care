@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, X, GripVertical, Check, Save } from 'lucide-react';
+import { ArrowLeft, Plus, X, GripVertical, Check, Save, ChevronUp, ChevronDown } from 'lucide-react';
 import { KikiCard } from '@/components/kiki/KikiComponents';
 import { useAppStore } from '@/stores/useAppStore';
 
@@ -14,7 +14,7 @@ export default function EditPlanScreen() {
   const patient = patients.find(p => p.id === id);
   const existingPlan = exercisePlans.find(p => p.patientId === id);
 
-  const [planName, setPlanName] = useState(existingPlan?.name || `Plan Semana 9 — ${patient?.name || ''}`);
+  const [planName, setPlanName] = useState(existingPlan?.name || 'Nuevo plan');
   const [selectedDays, setSelectedDays] = useState(['Lun', 'Mar', 'Mié', 'Jue', 'Vie']);
   const [durationWeeks, setDurationWeeks] = useState('4');
   const [planExercises, setPlanExercises] = useState<string[]>(existingPlan?.exercises || ['ex-1', 'ex-2', 'ex-3']);
@@ -24,6 +24,16 @@ export default function EditPlanScreen() {
   const toggleDay = (d: string) => setSelectedDays(prev => prev.includes(d) ? prev.filter(dd => dd !== d) : [...prev, d]);
   const removeExercise = (exId: string) => setPlanExercises(prev => prev.filter(e => e !== exId));
   const addExercise = (exId: string) => { setPlanExercises(prev => [...prev, exId]); setSearchEx(''); };
+
+  const moveExercise = useCallback((index: number, direction: 'up' | 'down') => {
+    setPlanExercises(prev => {
+      const newList = [...prev];
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= newList.length) return prev;
+      [newList[index], newList[targetIndex]] = [newList[targetIndex], newList[index]];
+      return newList;
+    });
+  }, []);
 
   const availableExercises = exercises.filter(e => !planExercises.includes(e.id) && (e.name.toLowerCase().includes(searchEx.toLowerCase())));
 
@@ -57,23 +67,17 @@ export default function EditPlanScreen() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pt-4 pb-28 space-y-5">
-        {/* Plan name */}
         <div>
           <label className="text-xs font-medium block mb-1">Nombre del plan</label>
           <input className="input-kiki text-sm" value={planName} onChange={e => setPlanName(e.target.value)} />
         </div>
 
-        {/* Frequency */}
         <div>
           <label className="text-xs font-medium block mb-1.5">Días de la semana</label>
           <div className="flex gap-2">
             {days.map(d => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => toggleDay(d)}
-                className={`w-10 h-10 rounded-full text-xs font-medium transition-colors ${selectedDays.includes(d) ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}
-              >
+              <button key={d} type="button" onClick={() => toggleDay(d)}
+                className={`w-10 h-10 rounded-full text-xs font-medium transition-colors ${selectedDays.includes(d) ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}>
                 {d}
               </button>
             ))}
@@ -81,13 +85,11 @@ export default function EditPlanScreen() {
           <p className="text-[10px] text-muted-foreground mt-1">{selectedDays.length} veces por semana</p>
         </div>
 
-        {/* Duration */}
         <div>
           <label className="text-xs font-medium block mb-1">Duración (semanas)</label>
           <input type="number" className="input-kiki text-sm w-24" value={durationWeeks} onChange={e => setDurationWeeks(e.target.value)} min="1" max="52" />
         </div>
 
-        {/* Exercises */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs font-medium">Ejercicios del plan</label>
@@ -95,12 +97,21 @@ export default function EditPlanScreen() {
           </div>
 
           <div className="space-y-2 mb-3">
-            {planExercises.map(exId => {
+            {planExercises.map((exId, index) => {
               const ex = exercises.find(e => e.id === exId);
               if (!ex) return null;
               return (
                 <div key={exId} className="flex items-center gap-2 p-2.5 rounded-xl bg-muted/50 border border-border">
-                  <GripVertical size={14} className="text-muted-foreground shrink-0 cursor-grab" />
+                  <div className="flex flex-col gap-0.5 shrink-0">
+                    <button onClick={() => moveExercise(index, 'up')} disabled={index === 0}
+                      className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5" aria-label="Mover arriba">
+                      <ChevronUp size={12} />
+                    </button>
+                    <button onClick={() => moveExercise(index, 'down')} disabled={index === planExercises.length - 1}
+                      className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5" aria-label="Mover abajo">
+                      <ChevronDown size={12} />
+                    </button>
+                  </div>
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: ex.thumbnailColor + '30' }}>
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: ex.thumbnailColor }} />
                   </div>
@@ -116,14 +127,8 @@ export default function EditPlanScreen() {
             })}
           </div>
 
-          {/* Add exercise */}
           <div className="relative">
-            <input
-              className="input-kiki text-sm"
-              placeholder="Buscar ejercicio para agregar…"
-              value={searchEx}
-              onChange={e => setSearchEx(e.target.value)}
-            />
+            <input className="input-kiki text-sm" placeholder="Buscar ejercicio para agregar…" value={searchEx} onChange={e => setSearchEx(e.target.value)} />
             {searchEx && availableExercises.length > 0 && (
               <div className="absolute top-full left-0 right-0 bg-card border border-border rounded-xl mt-1 shadow-kiki z-10 max-h-40 overflow-y-auto">
                 {availableExercises.slice(0, 5).map(ex => (
@@ -136,16 +141,12 @@ export default function EditPlanScreen() {
             )}
           </div>
 
-          <button
-            onClick={() => navigate('/kine/exercises')}
-            className="btn-ghost text-xs mt-2 w-full text-mint-600"
-          >
+          <button onClick={() => navigate('/kine/exercises')} className="btn-ghost text-xs mt-2 w-full text-mint-600">
             <Plus size={12} className="inline mr-1" /> Buscar en biblioteca
           </button>
         </div>
       </div>
 
-      {/* Sticky save */}
       <div className="sticky bottom-0 p-4 bg-background border-t border-border space-y-2">
         <button onClick={handleSave} className="btn-primary w-full text-sm">
           <Save size={14} className="inline mr-1" /> Guardar y notificar a la cuidadora
