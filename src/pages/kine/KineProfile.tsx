@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, ChevronRight, Bell, Globe, Shield, HelpCircle, Volume2, VolumeX, Lock, CreditCard, Edit2, MessageSquarePlus, Crown } from 'lucide-react';
+import { LogOut, ChevronRight, Bell, Globe, Shield, HelpCircle, Volume2, VolumeX, Lock, Edit2, MessageSquarePlus, Crown } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
 import { useAppStore } from '@/stores/useAppStore';
+import { toast } from 'sonner';
 
 export default function KineProfile() {
   const navigate = useNavigate();
@@ -19,11 +20,17 @@ export default function KineProfile() {
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [showPricing, setShowPricing] = useState(false);
 
+  // Computed stats
+  const activePatients = patients.length;
+  const totalSessionsLogged = sessions.length;
+  const weeksActive = Math.max(1, Math.ceil(totalSessionsLogged / 5));
+
   const handleLogout = () => { logout(); navigate('/'); };
 
   const handleSaveProfile = () => {
     updateUserProfile({ name: editName, email: editEmail, institution: editInst, matricula: editMatricula });
     setEditingAccount(false);
+    toast.success('Perfil actualizado');
   };
 
   const handleSubmitFeedback = () => {
@@ -49,13 +56,13 @@ export default function KineProfile() {
 
         <motion.div variants={stagger.item} className="flex justify-center gap-6 mb-2">
           {[
-            { value: patients.length.toString(), label: 'Pacientes' },
-            { value: sessions.length.toString(), label: 'Sesiones' },
-            { value: '12', label: 'Semanas' },
+            { value: activePatients.toString(), label: 'Pacientes activos' },
+            { value: totalSessionsLogged.toString(), label: 'Sesiones registradas' },
+            { value: weeksActive.toString(), label: 'Semanas en la app' },
           ].map(s => (
             <div key={s.label} className="text-center">
               <p className="text-xl font-bold text-foreground">{s.value}</p>
-              <p className="text-[11px] text-muted-foreground">{s.label}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">{s.label}</p>
             </div>
           ))}
         </motion.div>
