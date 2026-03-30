@@ -14,7 +14,155 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      children: {
+        Row: {
+          age: number | null
+          avatar_color: string | null
+          caregiver_id: string
+          created_at: string
+          date_of_birth: string | null
+          diagnosis: string | null
+          gmfcs: number | null
+          id: string
+          name: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          age?: number | null
+          avatar_color?: string | null
+          caregiver_id: string
+          created_at?: string
+          date_of_birth?: string | null
+          diagnosis?: string | null
+          gmfcs?: number | null
+          id?: string
+          name: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          age?: number | null
+          avatar_color?: string | null
+          caregiver_id?: string
+          created_at?: string
+          date_of_birth?: string | null
+          diagnosis?: string | null
+          gmfcs?: number | null
+          id?: string
+          name?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      feedback: {
+        Row: {
+          created_at: string
+          id: string
+          text: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          text: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          text?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          institution: string | null
+          matricula: string | null
+          name: string
+          phone: string | null
+          role: string
+          specialty: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id: string
+          institution?: string | null
+          matricula?: string | null
+          name?: string
+          phone?: string | null
+          role: string
+          specialty?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          institution?: string | null
+          matricula?: string | null
+          name?: string
+          phone?: string | null
+          role?: string
+          specialty?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      therapist_caregiver_links: {
+        Row: {
+          caregiver_email: string
+          caregiver_id: string | null
+          child_id: string | null
+          created_at: string
+          id: string
+          invited_at: string
+          responded_at: string | null
+          status: string
+          therapist_id: string
+        }
+        Insert: {
+          caregiver_email: string
+          caregiver_id?: string | null
+          child_id?: string | null
+          created_at?: string
+          id?: string
+          invited_at?: string
+          responded_at?: string | null
+          status?: string
+          therapist_id: string
+        }
+        Update: {
+          caregiver_email?: string
+          caregiver_id?: string | null
+          child_id?: string | null
+          created_at?: string
+          id?: string
+          invited_at?: string
+          responded_at?: string | null
+          status?: string
+          therapist_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "therapist_caregiver_links_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
