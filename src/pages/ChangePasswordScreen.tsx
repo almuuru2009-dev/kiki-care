@@ -1,30 +1,64 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Eye, EyeOff, Check, Lock } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Check, Lock, AlertCircle } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+const passwordRules = [
+  { test: (p: string) => p.length >= 8, label: 'Mínimo 8 caracteres' },
+  { test: (p: string) => /[A-Z]/.test(p), label: 'Al menos una mayúscula' },
+  { test: (p: string) => /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(p), label: 'Al menos un carácter especial' },
+];
 
 export default function ChangePasswordScreen() {
   const navigate = useNavigate();
-  const [current, setCurrent] = useState('');
   const [newPass, setNewPass] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isRecovery, setIsRecovery] = useState(false);
+
+  useEffect(() => {
+    // Check if this is a password recovery flow
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    if (hashParams.get('type') === 'recovery') {
+      setIsRecovery(true);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (newPass.length < 6) { setError('La contraseña debe tener al menos 6 caracteres'); return; }
-    if (newPass !== confirm) { setError('Las contraseñas no coinciden'); return; }
+
+    const failedRules = passwordRules.filter(r => !r.test(newPass));
+    if (failedRules.length > 0) {
+      setError(failedRules.map(r => r.label).join('. '));
+      return;
+    }
+    if (newPass !== confirm) {
+      setError('Las contraseñas no coinciden');
+      return;
+    }
+
     setLoading(true);
-    await new Promise(r => setTimeout(r, 600));
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPass });
+
+    if (updateError) {
+      setError(updateError.message);
+      setLoading(false);
+      return;
+    }
+
     setSuccess(true);
     setLoading(false);
-    setTimeout(() => navigate(-1), 1500);
+    toast.success('Contraseña actualizada');
+    setTimeout(() => navigate('/login', { replace: true }), 1500);
   };
+
+  const pwdValid = passwordRules.map(r => ({ ...r, pass: r.test(newPass) }));
 
   if (success) {
     return (
@@ -46,7 +80,7 @@ export default function ChangePasswordScreen() {
         <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full bg-muted flex items-center justify-center" aria-label="Volver">
           <ArrowLeft size={20} />
         </button>
-        <h1 className="text-lg font-semibold">Cambiar contraseña</h1>
+        <h1 className="text-lg font-semibold">{isRecovery ? 'Restablecer contraseña' : 'Cambiar contraseña'}</h1>
       </div>
 
       <motion.div className="flex-1 px-6 pt-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
@@ -58,23 +92,23 @@ export default function ChangePasswordScreen() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">Contraseña actual</label>
-            <div className="relative">
-              <input type={showCurrent ? 'text' : 'password'} value={current} onChange={e => setCurrent(e.target.value)} className="input-kiki pr-10" required />
-              <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-label="Toggle">
-                {showCurrent ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
-
-          <div>
             <label className="text-sm font-medium text-foreground mb-1.5 block">Nueva contraseña</label>
             <div className="relative">
-              <input type={showNew ? 'text' : 'password'} value={newPass} onChange={e => setNewPass(e.target.value)} className="input-kiki pr-10" placeholder="Mínimo 6 caracteres" required />
+              <input type={showNew ? 'text' : 'password'} value={newPass} onChange={e => setNewPass(e.target.value)} className="input-kiki pr-10" required />
               <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-label="Toggle">
                 {showNew ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
+            {newPass && (
+              <div className="mt-2 space-y-1">
+                {pwdValid.map((r, i) => (
+                  <div key={i} className={`flex items-center gap-1.5 text-xs ${r.pass ? 'text-mint-600' : 'text-rust'}`}>
+                    {r.pass ? <Check size={12} /> : <AlertCircle size={12} />}
+                    <span>{r.label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>

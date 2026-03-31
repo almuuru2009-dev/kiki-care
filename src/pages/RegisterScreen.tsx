@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Check, AlertCircle } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const passwordRules = [
   { test: (p: string) => p.length >= 8, label: 'Mínimo 8 caracteres' },
@@ -24,6 +26,7 @@ export default function RegisterScreen() {
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [done, setDone] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -53,10 +56,49 @@ export default function RegisterScreen() {
     return Object.keys(e).length === 0;
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     if (!validateStep3()) return;
+    setLoading(true);
+
+    const metadata: Record<string, string> = {
+      name: formData.name,
+      role,
+    };
+    if (role === 'kinesiologist') {
+      if (formData.specialty) metadata.specialty = formData.specialty;
+      if (formData.institution) metadata.institution = formData.institution;
+      if (formData.matricula) metadata.matricula = formData.matricula;
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
+      options: {
+        data: metadata,
+        emailRedirectTo: window.location.origin + '/login',
+      },
+    });
+
+    if (error) {
+      toast.error(error.message);
+      setLoading(false);
+      return;
+    }
+
+    // If caregiver registered a child, save it after profile is created
+    if (role === 'caregiver' && formData.childName && data.user) {
+      // Child will be created after email verification and first login
+      // Store child data in localStorage temporarily
+      localStorage.setItem('kikicare_pending_child', JSON.stringify({
+        name: formData.childName,
+        age: formData.childAge ? parseInt(formData.childAge) : null,
+        diagnosis: formData.childDiagnosis || null,
+        gmfcs: formData.gmfcs ? parseInt(formData.gmfcs) : null,
+      }));
+    }
+
+    setLoading(false);
     setDone(true);
-    setTimeout(() => navigate('/login'), 1500);
   };
 
   const pwdValid = passwordRules.map(r => ({ ...r, pass: r.test(formData.password) }));
@@ -86,7 +128,12 @@ export default function RegisterScreen() {
               <Check size={40} className="text-navy" />
             </div>
             <h2 className="text-xl font-bold text-foreground">¡Cuenta creada!</h2>
-            <p className="text-sm text-muted-foreground mt-2">Redirigiendo al inicio de sesión...</p>
+            <p className="text-sm text-muted-foreground mt-2 text-center px-4">
+              Revisá tu email para verificar tu cuenta antes de iniciar sesión.
+            </p>
+            <button onClick={() => navigate('/login')} className="btn-primary mt-6 px-8">
+              Ir al inicio de sesión
+            </button>
           </motion.div>
         ) : (
           <motion.div key={step} className="flex-1 px-6 pt-6 overflow-y-auto pb-6"
@@ -166,7 +213,6 @@ export default function RegisterScreen() {
                   <option value="">Nivel GMFCS</option>
                   {[1,2,3,4,5].map(l => <option key={l} value={l}>Nivel {l}</option>)}
                 </select>
-                <input className="input-kiki" placeholder="Nombre del kinesiólogo" value={formData.therapistName} onChange={e => handleChange('therapistName', e.target.value)} />
                 <button onClick={() => setStep(3)} className="btn-primary w-full">Siguiente</button>
               </div>
             )}
@@ -192,7 +238,6 @@ export default function RegisterScreen() {
                   )}
                 </div>
 
-                {/* Terms & Privacy */}
                 <div className="space-y-3">
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input type="checkbox" checked={acceptTerms} onChange={e => { setAcceptTerms(e.target.checked); setErrors(prev => ({ ...prev, terms: '' })); }}
@@ -219,7 +264,9 @@ export default function RegisterScreen() {
                   {errors.privacy && <p className="text-xs text-rust ml-8">{errors.privacy}</p>}
                 </div>
 
-                <button onClick={handleFinish} className="btn-primary w-full">Crear cuenta</button>
+                <button onClick={handleFinish} disabled={loading} className="btn-primary w-full disabled:opacity-60">
+                  {loading ? 'Creando cuenta...' : 'Crear cuenta'}
+                </button>
               </div>
             )}
           </motion.div>
