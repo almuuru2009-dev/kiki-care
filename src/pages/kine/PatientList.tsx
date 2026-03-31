@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Plus, SlidersHorizontal, X, Check, Mail, Archive, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
@@ -94,23 +95,62 @@ export default function PatientList() {
     setPendingMessages(false);
   };
 
-  const handleSendInvite = () => {
+  const handleSendInvite = async () => {
     if (!inviteEmail.trim() || !inviteEmail.includes('@')) {
       toast.error('Ingresá un email válido');
       return;
     }
     setInviteSending(true);
-    // Simulate sending invitation
-    setTimeout(() => {
-      setInviteSending(false);
-      setInviteSent(true);
-      toast.success(`Invitación enviada a ${inviteEmail}`);
-      setTimeout(() => {
-        setShowAddPatient(false);
-        setInviteEmail('');
-        setInviteSent(false);
-      }, 2000);
-    }, 1200);
+
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Debés iniciar sesión');
+        setInviteSending(false);
+        return;
+      }
+
+      // Check if link already exists
+      const { data: existing } = await supabase
+        .from('therapist_caregiver_links')
+        .select('id, status')
+        .eq('therapist_id', user.id)
+        .eq('caregiver_email', inviteEmail.toLowerCase())
+        .in('status', ['pending', 'active']);
+
+      if (existing && existing.length > 0) {
+        const status = existing[0].status;
+        toast.error(status === 'active' ? 'Ya tenés un vínculo activo con este email' : 'Ya hay una invitación pendiente para este email');
+        setInviteSending(false);
+        return;
+      }
+
+      // Create invitation
+      const { error } = await supabase
+        .from('therapist_caregiver_links')
+        .insert({
+          therapist_id: user.id,
+          caregiver_email: inviteEmail.toLowerCase(),
+          status: 'pending',
+        });
+
+      if (error) {
+        toast.error('Error al enviar la invitación');
+        console.error(error);
+      } else {
+        setInviteSent(true);
+        toast.success(`Invitación enviada a ${inviteEmail}`);
+        setTimeout(() => {
+          setShowAddPatient(false);
+          setInviteEmail('');
+          setInviteSent(false);
+        }, 2000);
+      }
+    } catch (err) {
+      toast.error('Error inesperado');
+    }
+    setInviteSending(false);
   };
 
   const handleArchive = (id: string) => {

@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 import SplashScreen from "./pages/SplashScreen";
 import RoleSelectScreen from "./pages/RoleSelectScreen";
@@ -13,6 +14,7 @@ import ChangePasswordScreen from "./pages/ChangePasswordScreen";
 import FAQScreen from "./pages/FAQScreen";
 import TermsScreen from "./pages/TermsScreen";
 import PrivacyScreen from "./pages/PrivacyScreen";
+import PendingInvitationsScreen from "./pages/PendingInvitationsScreen";
 
 import KineHome from "./pages/kine/KineHome";
 import PatientList from "./pages/kine/PatientList";
@@ -39,48 +41,51 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <div className="min-h-screen bg-navy-900 flex items-start justify-center">
-          <Routes>
-            <Route path="/" element={<SplashScreen />} />
-            <Route path="/role-select" element={<RoleSelectScreen />} />
-            <Route path="/login" element={<LoginScreen />} />
-            <Route path="/register" element={<RegisterScreen />} />
-            <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
-            <Route path="/change-password" element={<ChangePasswordScreen />} />
-            <Route path="/faq" element={<FAQScreen />} />
-            <Route path="/terms" element={<TermsScreen />} />
-            <Route path="/privacy" element={<PrivacyScreen />} />
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <div className="min-h-screen bg-navy-900 flex items-start justify-center">
+            <Routes>
+              <Route path="/" element={<SplashScreen />} />
+              <Route path="/role-select" element={<RoleSelectScreen />} />
+              <Route path="/login" element={<LoginScreen />} />
+              <Route path="/register" element={<RegisterScreen />} />
+              <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
+              <Route path="/change-password" element={<ChangePasswordScreen />} />
+              <Route path="/faq" element={<FAQScreen />} />
+              <Route path="/terms" element={<TermsScreen />} />
+              <Route path="/privacy" element={<PrivacyScreen />} />
+              <Route path="/pending-invitations" element={<PendingInvitationsScreen />} />
 
-            <Route path="/kine/home" element={<KineHome />} />
-            <Route path="/kine/patients" element={<PatientList />} />
-            <Route path="/kine/patients/:id" element={<PatientDetail />} />
-            <Route path="/kine/patients/:id/plan/edit" element={<EditPlanScreen />} />
-            <Route path="/kine/patients/:id/pre-report" element={<PatientDetail />} />
-            <Route path="/kine/alerts" element={<AlertsScreen />} />
-            <Route path="/kine/messages" element={<MessageList />} />
-            <Route path="/kine/messages/:id" element={<ConversationScreen />} />
-            <Route path="/kine/profile" element={<KineProfile />} />
-            <Route path="/kine/exercises" element={<ExerciseLibraryScreen />} />
-            <Route path="/kine/exercises/create" element={<CreateExerciseScreen />} />
-            <Route path="/kine/protocols/create" element={<CreateProtocolScreen />} />
+              <Route path="/kine/home" element={<KineHome />} />
+              <Route path="/kine/patients" element={<PatientList />} />
+              <Route path="/kine/patients/:id" element={<PatientDetail />} />
+              <Route path="/kine/patients/:id/plan/edit" element={<EditPlanScreen />} />
+              <Route path="/kine/patients/:id/pre-report" element={<PatientDetail />} />
+              <Route path="/kine/alerts" element={<AlertsScreen />} />
+              <Route path="/kine/messages" element={<MessageList />} />
+              <Route path="/kine/messages/:id" element={<ConversationScreen />} />
+              <Route path="/kine/profile" element={<KineProfile />} />
+              <Route path="/kine/exercises" element={<ExerciseLibraryScreen />} />
+              <Route path="/kine/exercises/create" element={<CreateExerciseScreen />} />
+              <Route path="/kine/protocols/create" element={<CreateProtocolScreen />} />
 
-            <Route path="/cuidadora/home" element={<CuidadoraHome />} />
-            <Route path="/cuidadora/session" element={<SessionPlayer />} />
-            <Route path="/cuidadora/progress" element={<ProgressScreen />} />
-            <Route path="/cuidadora/messages" element={<CuidadoraMessages />} />
-            <Route path="/cuidadora/messages/conversation" element={<ConversationScreen />} />
-            <Route path="/cuidadora/child" element={<ChildProfile />} />
-            <Route path="/cuidadora/medals" element={<MedalsScreen />} />
+              <Route path="/cuidadora/home" element={<CuidadoraHome />} />
+              <Route path="/cuidadora/session" element={<SessionPlayer />} />
+              <Route path="/cuidadora/progress" element={<ProgressScreen />} />
+              <Route path="/cuidadora/messages" element={<CuidadoraMessages />} />
+              <Route path="/cuidadora/messages/conversation" element={<ConversationScreen />} />
+              <Route path="/cuidadora/child" element={<ChildProfile />} />
+              <Route path="/cuidadora/medals" element={<MedalsScreen />} />
 
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </div>
-      </BrowserRouter>
-    </TooltipProvider>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </div>
+        </BrowserRouter>
+      </TooltipProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

@@ -1,13 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
+import { useAuthContext } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import kikiMascot from '@/assets/kiki-mascot.png';
 
 export default function LoginScreen() {
   const navigate = useNavigate();
-  const { selectedRole, login } = useAppStore();
+  const { selectedRole } = useAppStore();
+  const { user, profile } = useAuthContext();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -15,21 +19,82 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   const roleLabel = selectedRole === 'kinesiologist' ? 'Kinesiólogo' : 'Cuidadora';
-  const demoEmail = selectedRole === 'kinesiologist' ? 'kine@kikicare.app' : 'mama@kikicare.app';
+
+  // If already logged in, redirect
+  useEffect(() => {
+    if (user && profile) {
+      redirectByRole(profile.role);
+    }
+  }, [user, profile]);
+
+  const redirectByRole = (role: string) => {
+    if (role === 'kinesiologist') {
+      navigate('/kine/home', { replace: true });
+    } else {
+      // Check for pending invitations first
+      checkPendingInvitations();
+    }
+  };
+
+  const checkPendingInvitations = async () => {
+    if (!user?.email) {
+      navigate('/cuidadora/home', { replace: true });
+      return;
+    }
+    const { data } = await supabase
+      .from('therapist_caregiver_links')
+      .select('id')
+      .eq('caregiver_email', user.email)
+      .eq('status', 'pending')
+      .limit(1);
+
+    if (data && data.length > 0) {
+      navigate('/pending-invitations', { replace: true });
+    } else {
+      // Check if caregiver has pending child to create
+      const pendingChild = localStorage.getItem('kikicare_pending_child');
+      if (pendingChild) {
+        try {
+          const childData = JSON.parse(pendingChild);
+          await supabase.from('children').insert({
+            caregiver_id: user!.id,
+            name: childData.name,
+            age: childData.age,
+            diagnosis: childData.diagnosis,
+            gmfcs: childData.gmfcs,
+          });
+          localStorage.removeItem('kikicare_pending_child');
+        } catch (e) {
+          console.error('Error creating child:', e);
+        }
+      }
+      navigate('/cuidadora/home', { replace: true });
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    await new Promise(r => setTimeout(r, 600));
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-    const success = login(email, password);
-    if (success) {
-      const path = selectedRole === 'kinesiologist' ? '/kine/home' : '/cuidadora/home';
-      navigate(path);
-    } else {
-      setError('Email o contraseña incorrectos');
+    if (authError) {
+      if (authError.message.includes('Email not confirmed')) {
+        setError('Verificá tu email antes de iniciar sesión. Revisá tu bandeja de entrada.');
+      } else {
+        setError('Email o contraseña incorrectos');
+      }
+      setLoading(false);
+      return;
+    }
+
+    if (data.user) {
+      // Profile will be loaded by AuthContext, redirect handled by useEffect
+      toast.success('¡Bienvenido!');
     }
     setLoading(false);
   };
@@ -56,9 +121,11 @@ export default function LoginScreen() {
           <img src={kikiMascot} alt="Kiki" className="w-10 h-10 object-contain" />
           <div>
             <h1 className="text-xl font-bold text-foreground">Bienvenido</h1>
-            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-mint-100 text-mint-700">
-              Iniciando como {roleLabel}
-            </span>
+            {selectedRole && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-mint-100 text-mint-700">
+                Iniciando como {roleLabel}
+              </span>
+            )}
           </div>
         </div>
 
@@ -123,12 +190,6 @@ export default function LoginScreen() {
             Olvidé mi contraseña
           </button>
         </form>
-
-        <div className="mt-6 p-3 rounded-lg bg-muted/50 border border-border">
-          <p className="text-xs text-muted-foreground text-center">
-            <span className="font-medium">Demo:</span> {demoEmail} / demo1234
-          </p>
-        </div>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
           ¿No tenés cuenta?{' '}

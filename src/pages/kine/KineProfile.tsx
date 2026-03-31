@@ -5,6 +5,8 @@ import { LogOut, ChevronRight, Bell, Globe, Shield, HelpCircle, Volume2, VolumeX
 import { AppShell } from '@/components/layout/AppShell';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
 import { useAppStore } from '@/stores/useAppStore';
+import { useAuthContext } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export default function KineProfile() {
@@ -25,7 +27,9 @@ export default function KineProfile() {
   const totalSessionsLogged = sessions.length;
   const weeksActive = Math.max(1, Math.ceil(totalSessionsLogged / 5));
 
-  const handleLogout = () => { logout(); navigate('/'); };
+  const { signOut } = useAuthContext();
+
+  const handleLogout = async () => { await signOut(); navigate('/'); };
 
   const handleSaveProfile = () => {
     updateUserProfile({ name: editName, email: editEmail, institution: editInst, matricula: editMatricula });
