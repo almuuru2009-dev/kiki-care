@@ -5,6 +5,8 @@ import { LogOut, ChevronRight, Bell, Globe, Shield, HelpCircle, Volume2, VolumeX
 import { AppShell } from '@/components/layout/AppShell';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
 import { useAppStore } from '@/stores/useAppStore';
+import { useAuthContext } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export default function KineProfile() {
