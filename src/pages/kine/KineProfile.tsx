@@ -27,7 +27,9 @@ export default function KineProfile() {
   const totalSessionsLogged = sessions.length;
   const weeksActive = Math.max(1, Math.ceil(totalSessionsLogged / 5));
 
-  const handleLogout = () => { logout(); navigate('/'); };
+  const { signOut } = useAuthContext();
+
+  const handleLogout = async () => { await signOut(); navigate('/'); };
 
   const handleSaveProfile = () => {
     updateUserProfile({ name: editName, email: editEmail, institution: editInst, matricula: editMatricula });
