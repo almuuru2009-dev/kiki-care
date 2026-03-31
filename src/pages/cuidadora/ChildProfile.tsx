@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Send, LogOut, Bell, BellOff, Mail, ChevronRight, Settings, Volume2, VolumeX, Edit2, HelpCircle, Shield, Globe, MessageSquarePlus, UserMinus, UserPlus, Save, X } from 'lucide-react';
@@ -6,77 +6,198 @@ import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
 import { useAppStore } from '@/stores/useAppStore';
+import { useAuthContext } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import kikiGlasses from '@/assets/kiki-glasses.png';
 
+interface ChildData {
+  id: string;
+  name: string;
+  age: number | null;
+  diagnosis: string | null;
+  gmfcs: number | null;
+}
+
+interface TherapistLink {
+  id: string;
+  therapist_id: string;
+  therapist_name: string;
+  therapist_specialty: string | null;
+  therapist_matricula: string | null;
+}
+
 export default function ChildProfile() {
   const navigate = useNavigate();
-  const { patients, currentUser, logout, settings, updateSettings, sessions, updateUserProfile, submitFeedback } = useAppStore();
-  const child = patients.find(p => p.id === 'pat-1')!;
-  const totalSessions = sessions.filter(s => s.patientId === 'pat-1').length;
+  const { settings, updateSettings, submitFeedback } = useAppStore();
+  const { user, profile, signOut } = useAuthContext();
+
+  // Real data state
+  const [child, setChild] = useState<ChildData | null>(null);
+  const [therapistLink, setTherapistLink] = useState<TherapistLink | null>(null);
+  const [loadingData, setLoadingData] = useState(true);
 
   // Child editing state
   const [editingChild, setEditingChild] = useState(false);
-  const [childName, setChildName] = useState(child?.name || '');
-  const [childAge, setChildAge] = useState(child?.age?.toString() || '');
-  const [childDiagnosis, setChildDiagnosis] = useState(child?.diagnosis || '');
-  const [childGmfcs, setChildGmfcs] = useState(child?.gmfcs?.toString() || '');
+  const [childName, setChildName] = useState('');
+  const [childAge, setChildAge] = useState('');
+  const [childDiagnosis, setChildDiagnosis] = useState('');
+  const [childGmfcs, setChildGmfcs] = useState('');
 
   // Account editing
   const [editingAccount, setEditingAccount] = useState(false);
-  const [editName, setEditName] = useState(currentUser?.name || '');
-  const [editEmail, setEditEmail] = useState(currentUser?.email || '');
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
 
   // Therapist section
-  const [therapistLinked, setTherapistLinked] = useState(true);
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
-  const [showLinkInput, setShowLinkInput] = useState(false);
-  const [linkCode, setLinkCode] = useState('');
 
   // Feedback
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
 
-  const handleLogout = () => { logout(); navigate('/'); };
+  useEffect(() => {
+    if (user) {
+      loadData();
+      setEditName(profile?.name || '');
+      setEditEmail(profile?.email || user.email || '');
+    }
+  }, [user, profile]);
 
-  const handleSaveChild = () => {
-    // In a real app this would update the database
-    toast.success('Información del niño actualizada');
-    setEditingChild(false);
+  const loadData = async () => {
+    if (!user) return;
+
+    // Load children
+    const { data: children } = await supabase
+      .from('children')
+      .select('*')
+      .eq('caregiver_id', user.id)
+      .limit(1);
+
+    if (children && children.length > 0) {
+      const c = children[0];
+      setChild({ id: c.id, name: c.name, age: c.age, diagnosis: c.diagnosis, gmfcs: c.gmfcs });
+      setChildName(c.name);
+      setChildAge(c.age?.toString() || '');
+      setChildDiagnosis(c.diagnosis || '');
+      setChildGmfcs(c.gmfcs?.toString() || '');
+    }
+
+    // Load therapist link
+    const { data: links } = await supabase
+      .from('therapist_caregiver_links')
+      .select('id, therapist_id')
+      .eq('caregiver_id', user.id)
+      .eq('status', 'active')
+      .limit(1);
+
+    if (links && links.length > 0) {
+      const link = links[0];
+      const { data: therapistProfile } = await supabase
+        .from('profiles')
+        .select('name, specialty, matricula')
+        .eq('id', link.therapist_id)
+        .single();
+
+      setTherapistLink({
+        id: link.id,
+        therapist_id: link.therapist_id,
+        therapist_name: therapistProfile?.name || 'Kinesiólogo',
+        therapist_specialty: therapistProfile?.specialty || null,
+        therapist_matricula: therapistProfile?.matricula || null,
+      });
+    }
+
+    setLoadingData(false);
   };
 
-  const handleSaveAccount = () => {
-    updateUserProfile({ name: editName, email: editEmail });
-    setEditingAccount(false);
-    toast.success('Cuenta actualizada');
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/');
   };
 
-  const handleUnlink = () => {
-    setTherapistLinked(false);
-    setShowUnlinkConfirm(false);
-    toast.success('Kinesiólogo desvinculado');
+  const handleSaveChild = async () => {
+    if (!child) return;
+    const { error } = await supabase
+      .from('children')
+      .update({
+        name: childName,
+        age: childAge ? parseInt(childAge) : null,
+        diagnosis: childDiagnosis || null,
+        gmfcs: childGmfcs ? parseInt(childGmfcs) : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', child.id);
+
+    if (error) {
+      toast.error('Error al guardar');
+    } else {
+      setChild({ ...child, name: childName, age: childAge ? parseInt(childAge) : null, diagnosis: childDiagnosis, gmfcs: childGmfcs ? parseInt(childGmfcs) : null });
+      toast.success('Información del niño actualizada');
+      setEditingChild(false);
+    }
   };
 
-  const handleLink = () => {
-    if (!linkCode.trim()) return;
-    setTherapistLinked(true);
-    setShowLinkInput(false);
-    setLinkCode('');
-    toast.success('Solicitud de vínculo enviada');
+  const handleSaveAccount = async () => {
+    if (!user) return;
+    const { error } = await supabase
+      .from('profiles')
+      .update({ name: editName, updated_at: new Date().toISOString() })
+      .eq('id', user.id);
+
+    if (error) {
+      toast.error('Error al guardar');
+    } else {
+      setEditingAccount(false);
+      toast.success('Cuenta actualizada');
+    }
   };
 
-  const handleSubmitFeedback = () => {
-    if (!feedbackText.trim()) return;
-    submitFeedback(feedbackText);
-    setFeedbackSent(true);
-    setTimeout(() => { setShowFeedback(false); setFeedbackSent(false); setFeedbackText(''); }, 2000);
+  const handleUnlink = async () => {
+    if (!therapistLink) return;
+    const { error } = await supabase
+      .from('therapist_caregiver_links')
+      .update({ status: 'archived', responded_at: new Date().toISOString() })
+      .eq('id', therapistLink.id);
+
+    if (error) {
+      toast.error('Error al desvincular');
+    } else {
+      setTherapistLink(null);
+      setShowUnlinkConfirm(false);
+      toast.success('Kinesiólogo desvinculado');
+    }
+  };
+
+  const handleSubmitFeedback = async () => {
+    if (!feedbackText.trim() || !user) return;
+    const { error } = await supabase.from('feedback').insert({
+      user_id: user.id,
+      text: feedbackText,
+      type: 'comment',
+    });
+    if (!error) {
+      setFeedbackSent(true);
+      setTimeout(() => { setShowFeedback(false); setFeedbackSent(false); setFeedbackText(''); }, 2000);
+    }
   };
 
   const stagger = {
     container: { transition: { staggerChildren: 0.06 } },
     item: { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.35 } },
   };
+
+  if (loadingData) {
+    return (
+      <AppShell>
+        <ScreenHeader title="Perfil" />
+        <div className="flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-2 border-mint border-t-transparent rounded-full animate-spin" />
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -89,102 +210,110 @@ export default function ChildProfile() {
               animate={{ y: [0, -4, 0] }} transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }} />
           </div>
           <h2 className="text-xl font-bold">{child?.name || 'Mi niño'}</h2>
-          <p className="text-sm text-muted-foreground">{child?.age} años · {child?.diagnosis}</p>
-          <div className="flex gap-2 mt-2">
-            <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-muted">GMFCS Nivel {child?.gmfcs}</span>
-            <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-mint-100 text-mint-700">{totalSessions} sesiones</span>
-          </div>
-        </motion.div>
-
-        {/* Quick stats */}
-        <motion.div variants={stagger.item} className="flex gap-3">
-          <div className="flex-1 rounded-xl bg-mint-50 p-3 text-center">
-            <p className="text-lg font-bold text-navy">{child?.adherence}%</p>
-            <p className="text-[10px] text-muted-foreground">Adherencia</p>
-          </div>
-          <div className="flex-1 rounded-xl bg-blue-50 p-3 text-center">
-            <p className="text-lg font-bold text-navy">{child?.sessionsPerWeek}</p>
-            <p className="text-[10px] text-muted-foreground">Sesiones/sem</p>
-          </div>
+          {child && <p className="text-sm text-muted-foreground">{child.age} años · {child.diagnosis}</p>}
+          {child && (
+            <div className="flex gap-2 mt-2">
+              <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-muted">GMFCS Nivel {child.gmfcs}</span>
+            </div>
+          )}
         </motion.div>
 
         {/* Child info (editable) */}
-        <motion.div variants={stagger.item}>
-          <KikiCard>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Información del niño</h3>
-              <button onClick={() => {
-                if (editingChild) {
-                  // Cancel
-                  setChildName(child?.name || '');
-                  setChildAge(child?.age?.toString() || '');
-                  setChildDiagnosis(child?.diagnosis || '');
-                  setChildGmfcs(child?.gmfcs?.toString() || '');
-                }
-                setEditingChild(!editingChild);
-              }} className="text-xs text-mint-500 font-medium flex items-center gap-1">
-                {editingChild ? <><X size={12} /> Cancelar</> : <><Edit2 size={12} /> Editar</>}
-              </button>
-            </div>
-            {editingChild ? (
-              <div className="space-y-2.5">
-                <div>
-                  <label className="text-[10px] text-muted-foreground font-medium">Nombre</label>
-                  <input className="input-kiki text-sm" value={childName} onChange={e => setChildName(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground font-medium">Edad</label>
-                  <input className="input-kiki text-sm" type="number" value={childAge} onChange={e => setChildAge(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground font-medium">Diagnóstico</label>
-                  <input className="input-kiki text-sm" value={childDiagnosis} onChange={e => setChildDiagnosis(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground font-medium">Nivel GMFCS</label>
-                  <div className="flex gap-2 mt-1">
-                    {[1, 2, 3, 4, 5].map(level => (
-                      <button key={level} onClick={() => setChildGmfcs(level.toString())}
-                        className={`w-9 h-9 rounded-full text-xs font-bold transition-colors ${childGmfcs === level.toString() ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}>
-                        {level}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <button onClick={handleSaveChild} className="btn-primary w-full text-sm flex items-center justify-center gap-2">
-                  <Save size={14} /> Guardar cambios
+        {child && (
+          <motion.div variants={stagger.item}>
+            <KikiCard>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Información del niño</h3>
+                <button onClick={() => {
+                  if (editingChild) {
+                    setChildName(child.name);
+                    setChildAge(child.age?.toString() || '');
+                    setChildDiagnosis(child.diagnosis || '');
+                    setChildGmfcs(child.gmfcs?.toString() || '');
+                  }
+                  setEditingChild(!editingChild);
+                }} className="text-xs text-mint-500 font-medium flex items-center gap-1">
+                  {editingChild ? <><X size={12} /> Cancelar</> : <><Edit2 size={12} /> Editar</>}
                 </button>
               </div>
-            ) : (
-              <>
-                {[
-                  { label: 'Nombre', value: child?.name },
-                  { label: 'Edad', value: `${child?.age} años` },
-                  { label: 'Diagnóstico', value: child?.diagnosis },
-                  { label: 'GMFCS', value: `Nivel ${child?.gmfcs}` },
-                ].map(item => (
-                  <div key={item.label} className="flex justify-between py-2 border-b border-border last:border-0">
-                    <span className="text-sm text-muted-foreground">{item.label}</span>
-                    <span className="text-sm font-medium">{item.value}</span>
+              {editingChild ? (
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-medium">Nombre</label>
+                    <input className="input-kiki text-sm" value={childName} onChange={e => setChildName(e.target.value)} />
                   </div>
-                ))}
-              </>
-            )}
-          </KikiCard>
-        </motion.div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-medium">Edad</label>
+                    <input className="input-kiki text-sm" type="number" value={childAge} onChange={e => setChildAge(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-medium">Diagnóstico</label>
+                    <select className="input-kiki text-sm" value={childDiagnosis} onChange={e => setChildDiagnosis(e.target.value)}>
+                      <option value="">Seleccionar</option>
+                      <option>PCI espástica bilateral</option>
+                      <option>PCI espástica unilateral</option>
+                      <option>PCI discinética</option>
+                      <option>PCI atáxica</option>
+                      <option>PCI mixta</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-medium">Nivel GMFCS</label>
+                    <div className="flex gap-2 mt-1">
+                      {[1, 2, 3, 4, 5].map(level => (
+                        <button key={level} onClick={() => setChildGmfcs(level.toString())}
+                          className={`w-9 h-9 rounded-full text-xs font-bold transition-colors ${childGmfcs === level.toString() ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}>
+                          {level}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button onClick={handleSaveChild} className="btn-primary w-full text-sm flex items-center justify-center gap-2">
+                    <Save size={14} /> Guardar cambios
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {[
+                    { label: 'Nombre', value: child.name },
+                    { label: 'Edad', value: child.age ? `${child.age} años` : '-' },
+                    { label: 'Diagnóstico', value: child.diagnosis || '-' },
+                    { label: 'GMFCS', value: child.gmfcs ? `Nivel ${child.gmfcs}` : '-' },
+                  ].map(item => (
+                    <div key={item.label} className="flex justify-between py-2 border-b border-border last:border-0">
+                      <span className="text-sm text-muted-foreground">{item.label}</span>
+                      <span className="text-sm font-medium">{item.value}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </KikiCard>
+          </motion.div>
+        )}
+
+        {/* No child registered */}
+        {!child && (
+          <motion.div variants={stagger.item}>
+            <KikiCard>
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No tenés un niño registrado aún. Tu kinesiólogo te enviará una invitación.
+              </p>
+            </KikiCard>
+          </motion.div>
+        )}
 
         {/* My therapist */}
         <motion.div variants={stagger.item}>
           <KikiCard>
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Mi kinesiólogo</h3>
-            {therapistLinked ? (
+            {therapistLink ? (
               <>
                 <div className="flex items-center gap-3">
-                  <AvatarCircle name="Valeria Moreno" color="#7EEDC4" size="md" />
+                  <AvatarCircle name={therapistLink.therapist_name} color="#7EEDC4" size="md" />
                   <div className="flex-1">
-                    <p className="text-sm font-medium">Lic. Valeria Moreno</p>
-                    <p className="text-xs text-muted-foreground">Kinesiología Pediátrica</p>
-                    <p className="text-xs text-muted-foreground">MN-48291</p>
+                    <p className="text-sm font-medium">{therapistLink.therapist_name}</p>
+                    {therapistLink.therapist_specialty && <p className="text-xs text-muted-foreground">{therapistLink.therapist_specialty}</p>}
+                    {therapistLink.therapist_matricula && <p className="text-xs text-muted-foreground">{therapistLink.therapist_matricula}</p>}
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
@@ -198,21 +327,8 @@ export default function ChildProfile() {
               </>
             ) : (
               <div className="text-center py-4">
-                <p className="text-sm text-muted-foreground mb-3">No tenés un kinesiólogo vinculado</p>
-                {showLinkInput ? (
-                  <div className="space-y-2">
-                    <input className="input-kiki text-sm text-center" placeholder="Código de vinculación" value={linkCode} onChange={e => setLinkCode(e.target.value)} />
-                    <p className="text-[10px] text-muted-foreground">Pedile el código a tu kinesiólogo o esperá su invitación por email</p>
-                    <div className="flex gap-2">
-                      <button onClick={handleLink} className="btn-primary flex-1 text-sm" disabled={!linkCode.trim()}>Vincular</button>
-                      <button onClick={() => setShowLinkInput(false)} className="btn-ghost flex-1 text-sm">Cancelar</button>
-                    </div>
-                  </div>
-                ) : (
-                  <button onClick={() => setShowLinkInput(true)} className="btn-primary text-sm px-6">
-                    <UserPlus size={14} className="inline mr-1" /> Vincular kinesiólogo
-                  </button>
-                )}
+                <p className="text-sm text-muted-foreground">No tenés un kinesiólogo vinculado</p>
+                <p className="text-xs text-muted-foreground mt-1">Pedile a tu kinesiólogo que te envíe una invitación por email</p>
               </div>
             )}
           </KikiCard>
@@ -223,7 +339,7 @@ export default function ChildProfile() {
           <KikiCard>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mi cuenta</h3>
-              <button onClick={() => { setEditingAccount(!editingAccount); setEditName(currentUser?.name || ''); setEditEmail(currentUser?.email || ''); }}
+              <button onClick={() => { setEditingAccount(!editingAccount); setEditName(profile?.name || ''); setEditEmail(profile?.email || ''); }}
                 className="text-xs text-mint-500 font-medium flex items-center gap-1">
                 {editingAccount ? <><X size={12} /> Cancelar</> : <><Edit2 size={12} /> Editar</>}
               </button>
@@ -231,15 +347,14 @@ export default function ChildProfile() {
             {editingAccount ? (
               <div className="space-y-2">
                 <input className="input-kiki text-sm" value={editName} onChange={e => setEditName(e.target.value)} placeholder="Nombre" />
-                <input className="input-kiki text-sm" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="Email" />
+                <p className="text-xs text-muted-foreground">Email: {profile?.email || user?.email}</p>
                 <button onClick={handleSaveAccount} className="btn-primary w-full text-sm">Guardar</button>
               </div>
             ) : (
               <>
                 {[
-                  { label: 'Nombre', value: currentUser?.name },
-                  { label: 'Email', value: currentUser?.email },
-                  { label: 'Relación', value: 'Madre' },
+                  { label: 'Nombre', value: profile?.name || '-' },
+                  { label: 'Email', value: profile?.email || user?.email || '-' },
                 ].map(item => (
                   <div key={item.label} className="flex justify-between py-2 border-b border-border last:border-0">
                     <span className="text-sm text-muted-foreground">{item.label}</span>
@@ -263,7 +378,7 @@ export default function ChildProfile() {
               <div key={item.label} className="flex items-center justify-between py-2.5 border-b border-border last:border-0">
                 <div className="flex items-center gap-2"><item.icon size={14} className="text-muted-foreground" /><span className="text-sm">{item.label}</span></div>
                 <button onClick={() => updateSettings(item.key, !(settings as any)[item.key])}
-                  className={`w-10 h-6 rounded-full relative transition-colors ${(settings as any)[item.key] ? 'bg-mint' : 'bg-muted'}`} aria-label={`Toggle ${item.label}`}>
+                  className={`w-10 h-6 rounded-full relative transition-colors ${(settings as any)[item.key] ? 'bg-mint' : 'bg-muted'}`}>
                   <div className={`absolute top-1 w-4 h-4 rounded-full bg-card shadow-sm transition-all ${(settings as any)[item.key] ? 'right-1' : 'left-1'}`} />
                 </button>
               </div>
@@ -281,7 +396,7 @@ export default function ChildProfile() {
                 <span className="text-sm">Efectos de sonido</span>
               </div>
               <button onClick={() => updateSettings('soundEffects', !settings.soundEffects)}
-                className={`w-10 h-6 rounded-full relative transition-colors ${settings.soundEffects ? 'bg-mint' : 'bg-muted'}`} aria-label="Toggle sound effects">
+                className={`w-10 h-6 rounded-full relative transition-colors ${settings.soundEffects ? 'bg-mint' : 'bg-muted'}`}>
                 <div className={`absolute top-1 w-4 h-4 rounded-full bg-card shadow-sm transition-all ${settings.soundEffects ? 'right-1' : 'left-1'}`} />
               </button>
             </div>
