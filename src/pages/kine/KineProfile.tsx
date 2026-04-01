@@ -6,35 +6,42 @@ import { AppShell } from '@/components/layout/AppShell';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
 import { useAppStore } from '@/stores/useAppStore';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export default function KineProfile() {
   const navigate = useNavigate();
-  const { currentUser, logout, sessions, patients, settings, updateSettings, subscription, upgradePlan, submitFeedback, updateUserProfile } = useAppStore();
+  const { sessions, patients, settings, updateSettings, subscription, upgradePlan, submitFeedback } = useAppStore();
+  const { profile, signOut, updateProfile } = useAuthContext();
+
   const [editingAccount, setEditingAccount] = useState(false);
-  const [editName, setEditName] = useState(currentUser?.name || '');
-  const [editEmail, setEditEmail] = useState(currentUser?.email || '');
-  const [editInst, setEditInst] = useState(currentUser?.institution || '');
-  const [editMatricula, setEditMatricula] = useState(currentUser?.matricula || '');
+  const [editName, setEditName] = useState(profile?.name || '');
+  const [editEmail, setEditEmail] = useState(profile?.email || '');
+  const [editInst, setEditInst] = useState(profile?.institution || '');
+  const [editMatricula, setEditMatricula] = useState(profile?.matricula || '');
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [showPricing, setShowPricing] = useState(false);
 
-  // Computed stats
   const activePatients = patients.length;
   const totalSessionsLogged = sessions.length;
   const weeksActive = Math.max(1, Math.ceil(totalSessionsLogged / 5));
 
-  const { signOut } = useAuthContext();
-
   const handleLogout = async () => { await signOut(); navigate('/'); };
 
-  const handleSaveProfile = () => {
-    updateUserProfile({ name: editName, email: editEmail, institution: editInst, matricula: editMatricula });
-    setEditingAccount(false);
-    toast.success('Perfil actualizado');
+  const handleSaveProfile = async () => {
+    const { error } = await updateProfile({
+      name: editName,
+      email: editEmail,
+      institution: editInst,
+      matricula: editMatricula,
+    });
+    if (error) {
+      toast.error('Error al guardar');
+    } else {
+      setEditingAccount(false);
+      toast.success('Perfil actualizado');
+    }
   };
 
   const handleSubmitFeedback = () => {
@@ -53,9 +60,9 @@ export default function KineProfile() {
     <AppShell>
       <motion.div className="px-4 pt-6 pb-6 space-y-3" variants={stagger.container} initial="initial" animate="animate">
         <motion.div variants={stagger.item} className="flex flex-col items-center mb-4">
-          <AvatarCircle name={currentUser?.name || 'VM'} color="#7EEDC4" size="lg" />
-          <h2 className="text-lg font-bold mt-3">{currentUser?.name}</h2>
-          <p className="text-sm text-muted-foreground">{currentUser?.specialty}</p>
+          <AvatarCircle name={profile?.name || 'KP'} color="#7EEDC4" size="lg" />
+          <h2 className="text-lg font-bold mt-3">{profile?.name || 'Profesional'}</h2>
+          <p className="text-sm text-muted-foreground">{profile?.specialty || 'Kinesiólogo/a'}</p>
         </motion.div>
 
         <motion.div variants={stagger.item} className="flex justify-center gap-6 mb-2">
@@ -76,7 +83,7 @@ export default function KineProfile() {
           <KikiCard>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mi cuenta</h3>
-              <button onClick={() => { setEditingAccount(!editingAccount); setEditName(currentUser?.name || ''); setEditEmail(currentUser?.email || ''); setEditInst(currentUser?.institution || ''); setEditMatricula(currentUser?.matricula || ''); }}
+              <button onClick={() => { setEditingAccount(!editingAccount); setEditName(profile?.name || ''); setEditEmail(profile?.email || ''); setEditInst(profile?.institution || ''); setEditMatricula(profile?.matricula || ''); }}
                 className="text-xs text-mint-500 font-medium flex items-center gap-1">
                 <Edit2 size={12} /> {editingAccount ? 'Cancelar' : 'Editar'}
               </button>
@@ -92,10 +99,10 @@ export default function KineProfile() {
             ) : (
               <>
                 {[
-                  { label: 'Nombre', value: currentUser?.name },
-                  { label: 'Email', value: currentUser?.email },
-                  { label: 'Matrícula', value: currentUser?.matricula },
-                  { label: 'Institución', value: currentUser?.institution },
+                  { label: 'Nombre', value: profile?.name },
+                  { label: 'Email', value: profile?.email },
+                  { label: 'Matrícula', value: profile?.matricula || '—' },
+                  { label: 'Institución', value: profile?.institution || '—' },
                 ].map(item => (
                   <div key={item.label} className="flex justify-between py-2 border-b border-border last:border-0">
                     <span className="text-sm text-muted-foreground">{item.label}</span>

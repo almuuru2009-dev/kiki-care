@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Plus, SlidersHorizontal, X, Check, Mail, Archive, Trash2 } from 'lucide-react';
+import { Search, Plus, SlidersHorizontal, X, Check, Mail, Archive, Unlink, ArchiveRestore, AlertTriangle } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { PatientCard } from '@/components/kiki/PatientCard';
@@ -22,7 +22,7 @@ const gmfcsFilters = [
 
 export default function PatientList() {
   const navigate = useNavigate();
-  const { patients, conversations, archivePatient, deletePatient, addPatient } = useAppStore();
+  const { patients, conversations, archivePatient } = useAppStore();
   const [search, setSearch] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [activeAdherence, setActiveAdherence] = useState<string[]>([]);
@@ -30,6 +30,7 @@ export default function PatientList() {
   const [activeActivity, setActiveActivity] = useState<string[]>([]);
   const [activeGmfcs, setActiveGmfcs] = useState<number[]>([]);
   const [pendingMessages, setPendingMessages] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   // Add patient modal
   const [showAddPatient, setShowAddPatient] = useState(false);
@@ -39,6 +40,12 @@ export default function PatientList() {
 
   // Action modal for patient
   const [actionPatientId, setActionPatientId] = useState<string | null>(null);
+
+  // Confirmation dialog
+  const [confirmAction, setConfirmAction] = useState<{ type: 'archive' | 'unlink'; patientId: string; patientName: string } | null>(null);
+
+  // Archived patients (simple in-memory tracking)
+  const [archivedPatientIds, setArchivedPatientIds] = useState<string[]>([]);
 
   const toggleFilter = (arr: string[], val: string, setter: (v: string[]) => void) => {
     setter(arr.includes(val) ? arr.filter(v => v !== val) : [...arr, val]);
@@ -50,8 +57,14 @@ export default function PatientList() {
 
   const hasActiveFilters = activeAdherence.length > 0 || activeRisk.length > 0 || activeActivity.length > 0 || activeGmfcs.length > 0 || pendingMessages;
 
-  const filtered = patients.filter(p => {
+  const activePatients = patients.filter(p => !archivedPatientIds.includes(p.id));
+  const archivedPatients = patients.filter(p => archivedPatientIds.includes(p.id));
+
+  const displayPatients = showArchived ? archivedPatients : activePatients;
+
+  const filtered = displayPatients.filter(p => {
     if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.diagnosis.toLowerCase().includes(search.toLowerCase())) return false;
+    if (showArchived) return true; // No filters on archived view
     if (activeAdherence.length > 0) {
       const match = activeAdherence.some(f => {
         if (f.includes('>75')) return p.adherence > 75;
@@ -103,7 +116,6 @@ export default function PatientList() {
     setInviteSending(true);
 
     try {
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error('Debés iniciar sesión');
@@ -111,7 +123,6 @@ export default function PatientList() {
         return;
       }
 
-      // Check if link already exists
       const { data: existing } = await supabase
         .from('therapist_caregiver_links')
         .select('id, status')
@@ -126,7 +137,6 @@ export default function PatientList() {
         return;
       }
 
-      // Create invitation
       const { error } = await supabase
         .from('therapist_caregiver_links')
         .insert({
@@ -153,16 +163,23 @@ export default function PatientList() {
     setInviteSending(false);
   };
 
-  const handleArchive = (id: string) => {
-    archivePatient(id);
+  const handleConfirmArchive = (id: string) => {
+    setArchivedPatientIds(prev => [...prev, id]);
+    setConfirmAction(null);
     setActionPatientId(null);
     toast.success('Paciente archivado');
   };
 
-  const handleDelete = (id: string) => {
-    deletePatient(id);
+  const handleConfirmUnlink = (id: string) => {
+    archivePatient(id);
+    setConfirmAction(null);
     setActionPatientId(null);
     toast.success('Paciente desvinculado');
+  };
+
+  const handleRestorePatient = (id: string) => {
+    setArchivedPatientIds(prev => prev.filter(pid => pid !== id));
+    toast.success('Paciente restaurado');
   };
 
   const actionPatient = actionPatientId ? patients.find(p => p.id === actionPatientId) : null;
@@ -172,25 +189,43 @@ export default function PatientList() {
       <ScreenHeader title="Mis Pacientes" />
 
       <div className="px-4 pb-6">
+        {/* Tab: Active / Archived */}
+        <div className="flex gap-2 mb-3">
+          <button
+            onClick={() => setShowArchived(false)}
+            className={`flex-1 py-2 rounded-full text-sm font-medium transition-colors ${!showArchived ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}
+          >
+            Activos ({activePatients.length})
+          </button>
+          <button
+            onClick={() => setShowArchived(true)}
+            className={`flex-1 py-2 rounded-full text-sm font-medium transition-colors ${showArchived ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}
+          >
+            Archivados ({archivedPatients.length})
+          </button>
+        </div>
+
         {/* Search + Filter button */}
         <div className="flex gap-2 mb-3">
           <div className="relative flex-1">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input type="text" value={search} onChange={e => setSearch(e.target.value)} className="input-kiki pl-10" placeholder="Buscar paciente..." />
           </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`px-3 py-2.5 rounded-[10px] border-[1.5px] flex items-center gap-1.5 text-sm font-medium transition-colors ${hasActiveFilters ? 'border-mint bg-mint-50 text-mint-700' : 'border-border bg-card text-foreground'}`}
-          >
-            <SlidersHorizontal size={16} />
-            Filtros
-            {hasActiveFilters && <span className="w-5 h-5 rounded-full bg-mint text-navy text-[10px] font-bold flex items-center justify-center">{activeAdherence.length + activeRisk.length + activeActivity.length + activeGmfcs.length + (pendingMessages ? 1 : 0)}</span>}
-          </button>
+          {!showArchived && (
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`px-3 py-2.5 rounded-[10px] border-[1.5px] flex items-center gap-1.5 text-sm font-medium transition-colors ${hasActiveFilters ? 'border-mint bg-mint-50 text-mint-700' : 'border-border bg-card text-foreground'}`}
+            >
+              <SlidersHorizontal size={16} />
+              Filtros
+              {hasActiveFilters && <span className="w-5 h-5 rounded-full bg-mint text-navy text-[10px] font-bold flex items-center justify-center">{activeAdherence.length + activeRisk.length + activeActivity.length + activeGmfcs.length + (pendingMessages ? 1 : 0)}</span>}
+            </button>
+          )}
         </div>
 
         {/* Filter panel */}
         <AnimatePresence>
-          {showFilters && (
+          {showFilters && !showArchived && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
@@ -265,7 +300,7 @@ export default function PatientList() {
         </AnimatePresence>
 
         {/* Results count */}
-        {hasActiveFilters && (
+        {hasActiveFilters && !showArchived && (
           <p className="text-xs text-muted-foreground mb-2">{filtered.length} paciente{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}</p>
         )}
 
@@ -274,35 +309,48 @@ export default function PatientList() {
           {filtered.map((p, i) => (
             <motion.div key={p.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
               <div className="relative">
-                <PatientCard patient={p} onClick={() => navigate(`/kine/patients/${p.id}`)} />
+                <PatientCard patient={p} onClick={() => !showArchived ? navigate(`/kine/patients/${p.id}`) : undefined} />
                 <button
-                  onClick={(e) => { e.stopPropagation(); setActionPatientId(p.id); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (showArchived) {
+                      handleRestorePatient(p.id);
+                    } else {
+                      setActionPatientId(p.id);
+                    }
+                  }}
                   className="absolute top-3 right-3 w-7 h-7 rounded-full bg-muted/80 flex items-center justify-center text-muted-foreground hover:bg-muted z-10"
-                  aria-label="Opciones"
+                  aria-label={showArchived ? 'Restaurar' : 'Opciones'}
                 >
-                  <span className="text-xs font-bold">⋯</span>
+                  {showArchived ? <ArchiveRestore size={14} /> : <span className="text-xs font-bold">⋯</span>}
                 </button>
               </div>
             </motion.div>
           ))}
           {filtered.length === 0 && (
             <div className="text-center py-12">
-              <p className="text-muted-foreground text-sm">No se encontraron pacientes con estos filtros</p>
-              <button onClick={clearFilters} className="btn-ghost text-sm text-mint-600 mt-2">Limpiar filtros</button>
+              <p className="text-muted-foreground text-sm">
+                {showArchived ? 'No hay pacientes archivados' : 'No se encontraron pacientes con estos filtros'}
+              </p>
+              {hasActiveFilters && !showArchived && (
+                <button onClick={clearFilters} className="btn-ghost text-sm text-mint-600 mt-2">Limpiar filtros</button>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      {/* FAB - Add Patient */}
-      <button
-        onClick={() => setShowAddPatient(true)}
-        className="fixed bottom-24 right-4 w-14 h-14 rounded-full bg-mint flex items-center justify-center shadow-kiki-lg active:scale-95 transition-transform z-10"
-        style={{ maxWidth: '390px', right: 'calc(50% - 195px + 16px)' }}
-        aria-label="Agregar paciente"
-      >
-        <Plus size={24} className="text-navy" />
-      </button>
+      {/* FAB - Add Patient (only on active view) */}
+      {!showArchived && (
+        <button
+          onClick={() => setShowAddPatient(true)}
+          className="fixed bottom-24 right-4 w-14 h-14 rounded-full bg-mint flex items-center justify-center shadow-kiki-lg active:scale-95 transition-transform z-10"
+          style={{ maxWidth: '390px', right: 'calc(50% - 195px + 16px)' }}
+          aria-label="Agregar paciente"
+        >
+          <Plus size={24} className="text-navy" />
+        </button>
+      )}
 
       {/* Add Patient Modal */}
       {showAddPatient && (
@@ -352,7 +400,7 @@ export default function PatientList() {
       )}
 
       {/* Patient Action Modal */}
-      {actionPatient && (
+      {actionPatient && !confirmAction && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center" onClick={() => setActionPatientId(null)}>
           <motion.div
             initial={{ y: 100 }} animate={{ y: 0 }}
@@ -362,13 +410,49 @@ export default function PatientList() {
             <h3 className="font-bold text-base mb-1">{actionPatient.name}</h3>
             <p className="text-xs text-muted-foreground mb-4">{actionPatient.diagnosis}</p>
             <div className="space-y-2">
-              <button onClick={() => handleArchive(actionPatient.id)} className="w-full flex items-center gap-3 py-3 px-4 rounded-xl bg-amber-50 text-amber-700 text-sm font-medium">
+              <button onClick={() => setConfirmAction({ type: 'archive', patientId: actionPatient.id, patientName: actionPatient.name })} className="w-full flex items-center gap-3 py-3 px-4 rounded-xl bg-amber-50 text-amber-700 text-sm font-medium">
                 <Archive size={18} /> Archivar paciente
               </button>
-              <button onClick={() => handleDelete(actionPatient.id)} className="w-full flex items-center gap-3 py-3 px-4 rounded-xl bg-red-50 text-rust text-sm font-medium">
-                <Trash2 size={18} /> Desvincular paciente
+              <button onClick={() => setConfirmAction({ type: 'unlink', patientId: actionPatient.id, patientName: actionPatient.name })} className="w-full flex items-center gap-3 py-3 px-4 rounded-xl bg-red-50 text-rust text-sm font-medium">
+                <Unlink size={18} /> Desvincular paciente
               </button>
               <button onClick={() => setActionPatientId(null)} className="w-full py-3 text-sm text-muted-foreground font-medium">
+                Cancelar
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog */}
+      {confirmAction && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center px-6" onClick={() => setConfirmAction(null)}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+            className="bg-card rounded-2xl p-6 w-full max-w-[340px] shadow-kiki-lg" onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${confirmAction.type === 'archive' ? 'bg-amber-100' : 'bg-red-100'}`}>
+                <AlertTriangle size={24} className={confirmAction.type === 'archive' ? 'text-amber-600' : 'text-rust'} />
+              </div>
+              <div>
+                <h3 className="font-bold text-base">¿Estás seguro?</h3>
+                <p className="text-xs text-muted-foreground">
+                  {confirmAction.type === 'archive'
+                    ? `${confirmAction.patientName} será archivado. Podrás restaurarlo después.`
+                    : `${confirmAction.patientName} será desvinculado. Se perderá la conexión.`
+                  }
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => confirmAction.type === 'archive' ? handleConfirmArchive(confirmAction.patientId) : handleConfirmUnlink(confirmAction.patientId)}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-medium ${confirmAction.type === 'archive' ? 'bg-amber-500 text-white' : 'bg-rust text-white'}`}
+              >
+                {confirmAction.type === 'archive' ? 'Sí, archivar' : 'Sí, desvincular'}
+              </button>
+              <button onClick={() => setConfirmAction(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground">
                 Cancelar
               </button>
             </div>
