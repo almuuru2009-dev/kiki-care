@@ -1,19 +1,40 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuthContext } from '@/contexts/AuthContext';
 import kikiMascot from '@/assets/kiki-mascot.png';
 
 export default function SplashScreen() {
   const navigate = useNavigate();
+  const { user, profile, loading } = useAuthContext();
   const [show, setShow] = useState(true);
+  const [minTimePassed, setMinTimePassed] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setShow(false);
-      setTimeout(() => navigate('/role-select'), 400);
-    }, 2200);
+    const timer = setTimeout(() => setMinTimePassed(true), 2200);
     return () => clearTimeout(timer);
-  }, [navigate]);
+  }, []);
+
+  useEffect(() => {
+    if (!minTimePassed) return;
+
+    setShow(false);
+    const fadeTimer = setTimeout(() => {
+      if (loading) return; // still loading auth
+
+      if (user && profile) {
+        // Already logged in → redirect by role
+        if (profile.role === 'kinesiologist') {
+          navigate('/kine/home', { replace: true });
+        } else {
+          navigate('/cuidadora/home', { replace: true });
+        }
+      } else {
+        navigate('/role-select', { replace: true });
+      }
+    }, 400);
+    return () => clearTimeout(fadeTimer);
+  }, [minTimePassed, loading, user, profile, navigate]);
 
   return (
     <div className="mobile-frame">
