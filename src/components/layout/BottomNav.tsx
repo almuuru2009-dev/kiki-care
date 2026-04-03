@@ -25,10 +25,7 @@ const caregiverItems = [
 
 export function BottomNav({ role, currentPath }: BottomNavProps) {
   const navigate = useNavigate();
-  const { conversations } = useAppStore();
-
   const items = role === 'kinesiologist' ? kineItems : caregiverItems;
-  const unreadMessages = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
   return (
     <div className="shrink-0 bg-navy border-t border-navy-600 safe-bottom">
