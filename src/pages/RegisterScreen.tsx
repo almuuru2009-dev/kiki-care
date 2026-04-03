@@ -239,7 +239,10 @@ export default function RegisterScreen() {
               <div className="space-y-4">
                 <h2 className="text-xl font-bold">Datos del niño</h2>
                 <input className="input-kiki" placeholder="Nombre del niño" value={formData.childName} onChange={e => handleChange('childName', e.target.value)} />
-                <input className="input-kiki" placeholder="Edad" type="number" value={formData.childAge} onChange={e => handleChange('childAge', e.target.value)} />
+                <input className="input-kiki" placeholder="Edad" type="number" min="0" max="18" value={formData.childAge} onChange={e => {
+                  const val = e.target.value;
+                  if (val === '' || (parseInt(val) >= 0 && parseInt(val) <= 18)) handleChange('childAge', val);
+                }} />
                 <select className="input-kiki" value={formData.childDiagnosis} onChange={e => handleChange('childDiagnosis', e.target.value)}>
                   <option value="">Diagnóstico</option>
                   <option>PCI espástica bilateral</option>
