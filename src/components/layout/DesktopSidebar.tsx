@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Home, Users, MessageCircle, User, TrendingUp, Trophy, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-interface BottomNavProps {
+interface DesktopSidebarProps {
   role: 'kinesiologist' | 'caregiver';
   currentPath: string;
 }
@@ -23,40 +23,40 @@ const caregiverItems = [
   { icon: User, label: 'Perfil', path: '/cuidadora/child' },
 ];
 
-export function BottomNav({ role, currentPath }: BottomNavProps) {
+export function DesktopSidebar({ role, currentPath }: DesktopSidebarProps) {
   const navigate = useNavigate();
   const items = role === 'kinesiologist' ? kineItems : caregiverItems;
 
   return (
-    <div className="shrink-0 bg-navy border-t border-navy-600 safe-bottom">
-      <div className="flex items-center justify-around h-[60px]">
+    <aside className="w-56 h-screen sticky top-0 bg-navy flex flex-col py-6 px-3">
+      <div className="px-3 mb-8">
+        <h2 className="text-lg font-bold text-mint">KikiCare</h2>
+        <p className="text-[10px] text-navy-300 mt-0.5">
+          {role === 'kinesiologist' ? 'Panel Kinesiólogo' : 'Panel Cuidador/a'}
+        </p>
+      </div>
+
+      <nav className="flex-1 space-y-1">
         {items.map(item => {
           const isActive = currentPath.startsWith(item.path);
           const Icon = item.icon;
-
           return (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
               className={cn(
-                "flex flex-col items-center gap-0.5 px-2 py-1 transition-colors relative",
-                isActive ? "text-mint" : "text-navy-300 hover:text-mint-200"
+                "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-mint/15 text-mint"
+                  : "text-navy-300 hover:bg-navy-600 hover:text-mint-200"
               )}
-              aria-label={item.label}
             >
-              <div className="relative">
-                <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} />
-              </div>
-              <span className={cn("text-[9px]", isActive ? "font-semibold" : "font-medium")}>
-                {item.label}
-              </span>
-              {isActive && (
-                <div className="absolute -bottom-1 w-5 h-[3px] rounded-full bg-mint" />
-              )}
+              <Icon size={18} strokeWidth={isActive ? 2.5 : 1.8} />
+              <span>{item.label}</span>
             </button>
           );
         })}
-      </div>
-    </div>
+      </nav>
+    </aside>
   );
 }
