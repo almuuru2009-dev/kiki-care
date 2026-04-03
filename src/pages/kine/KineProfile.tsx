@@ -1,38 +1,55 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, ChevronRight, Bell, Globe, Shield, HelpCircle, Volume2, VolumeX, Lock, Edit2, MessageSquarePlus, Crown } from 'lucide-react';
+import { LogOut, ChevronRight, HelpCircle, Globe, Shield, Edit2, MessageSquarePlus, Save, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
+import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
-import { useAppStore } from '@/stores/useAppStore';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export default function KineProfile() {
   const navigate = useNavigate();
-  const { sessions, patients, settings, updateSettings, subscription, upgradePlan, submitFeedback } = useAppStore();
-  const { profile, signOut, updateProfile } = useAuthContext();
+  const { user, profile, signOut, updateProfile } = useAuthContext();
 
   const [editingAccount, setEditingAccount] = useState(false);
   const [editName, setEditName] = useState(profile?.name || '');
-  const [editEmail, setEditEmail] = useState(profile?.email || '');
   const [editInst, setEditInst] = useState(profile?.institution || '');
   const [editMatricula, setEditMatricula] = useState(profile?.matricula || '');
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
-  const [showPricing, setShowPricing] = useState(false);
 
-  const activePatients = patients.length;
-  const totalSessionsLogged = sessions.length;
-  const weeksActive = Math.max(1, Math.ceil(totalSessionsLogged / 5));
+  const [patientCount, setPatientCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) loadStats();
+  }, [user]);
+
+  useEffect(() => {
+    setEditName(profile?.name || '');
+    setEditInst(profile?.institution || '');
+    setEditMatricula(profile?.matricula || '');
+  }, [profile]);
+
+  const loadStats = async () => {
+    if (!user) return;
+    const { count } = await supabase
+      .from('therapist_caregiver_links')
+      .select('*', { count: 'exact', head: true })
+      .eq('therapist_id', user.id)
+      .eq('status', 'active');
+    setPatientCount(count || 0);
+    setLoading(false);
+  };
 
   const handleLogout = async () => { await signOut(); navigate('/'); };
 
   const handleSaveProfile = async () => {
     const { error } = await updateProfile({
       name: editName,
-      email: editEmail,
       institution: editInst,
       matricula: editMatricula,
     });
@@ -44,10 +61,11 @@ export default function KineProfile() {
     }
   };
 
-  const handleSubmitFeedback = () => {
-    if (!feedbackText.trim()) return;
-    submitFeedback(feedbackText);
+  const handleSubmitFeedback = async () => {
+    if (!feedbackText.trim() || !user) return;
+    await supabase.from('feedback').insert({ user_id: user.id, text: feedbackText, type: 'comment' });
     setFeedbackSent(true);
+    toast.success('Gracias por tu comentario');
     setTimeout(() => { setShowFeedback(false); setFeedbackSent(false); setFeedbackText(''); }, 2000);
   };
 
@@ -58,55 +76,60 @@ export default function KineProfile() {
 
   return (
     <AppShell>
-      <motion.div className="px-4 pt-6 pb-6 space-y-3" variants={stagger.container} initial="initial" animate="animate">
-        <motion.div variants={stagger.item} className="flex flex-col items-center mb-4">
-          <AvatarCircle name={profile?.name || 'KP'} color="#7EEDC4" size="lg" />
-          <h2 className="text-lg font-bold mt-3">{profile?.name || 'Profesional'}</h2>
-          <p className="text-sm text-muted-foreground">{profile?.specialty || 'Kinesiólogo/a'}</p>
+      <ScreenHeader title="Mi Perfil" />
+
+      <motion.div className="px-4 pb-6 space-y-4" variants={stagger.container} initial="initial" animate="animate">
+        {/* Avatar */}
+        <motion.div variants={stagger.item} className="flex flex-col items-center">
+          <AvatarCircle name={profile?.name || 'K'} color="#7EEDC4" size="lg" />
+          <h2 className="text-xl font-bold mt-3">{profile?.name || 'Kinesiólogo'}</h2>
+          <p className="text-sm text-muted-foreground">{profile?.specialty || 'Kinesiología'}</p>
         </motion.div>
 
-        <motion.div variants={stagger.item} className="flex justify-center gap-6 mb-2">
-          {[
-            { value: activePatients.toString(), label: 'Pacientes activos' },
-            { value: totalSessionsLogged.toString(), label: 'Sesiones registradas' },
-            { value: weeksActive.toString(), label: 'Semanas en la app' },
-          ].map(s => (
-            <div key={s.label} className="text-center">
-              <p className="text-xl font-bold text-foreground">{s.value}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">{s.label}</p>
+        {/* Stats */}
+        <motion.div variants={stagger.item}>
+          <div className="flex gap-3 justify-center">
+            <div className="text-center px-4 py-2 rounded-xl bg-mint-50">
+              <p className="text-lg font-bold text-mint-700">{patientCount}</p>
+              <p className="text-[10px] text-muted-foreground">Pacientes</p>
             </div>
-          ))}
+          </div>
         </motion.div>
 
-        {/* Account */}
+        {/* Account info */}
         <motion.div variants={stagger.item}>
           <KikiCard>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mi cuenta</h3>
-              <button onClick={() => { setEditingAccount(!editingAccount); setEditName(profile?.name || ''); setEditEmail(profile?.email || ''); setEditInst(profile?.institution || ''); setEditMatricula(profile?.matricula || ''); }}
-                className="text-xs text-mint-500 font-medium flex items-center gap-1">
-                <Edit2 size={12} /> {editingAccount ? 'Cancelar' : 'Editar'}
+              <button onClick={() => {
+                if (editingAccount) { setEditName(profile?.name || ''); setEditInst(profile?.institution || ''); setEditMatricula(profile?.matricula || ''); }
+                setEditingAccount(!editingAccount);
+              }} className="text-xs text-mint-500 font-medium flex items-center gap-1">
+                {editingAccount ? <><X size={12} /> Cancelar</> : <><Edit2 size={12} /> Editar</>}
               </button>
             </div>
             {editingAccount ? (
               <div className="space-y-2">
-                <input className="input-kiki text-sm" value={editName} onChange={e => setEditName(e.target.value)} placeholder="Nombre" />
-                <input className="input-kiki text-sm" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="Email" />
-                <input className="input-kiki text-sm" value={editMatricula} onChange={e => setEditMatricula(e.target.value)} placeholder="Matrícula" />
-                <input className="input-kiki text-sm" value={editInst} onChange={e => setEditInst(e.target.value)} placeholder="Institución" />
-                <button onClick={handleSaveProfile} className="btn-primary w-full text-sm">Guardar cambios</button>
+                <div><label className="text-[10px] text-muted-foreground">Nombre</label><input className="input-kiki text-sm" value={editName} onChange={e => setEditName(e.target.value)} /></div>
+                <div><label className="text-[10px] text-muted-foreground">Institución</label><input className="input-kiki text-sm" value={editInst} onChange={e => setEditInst(e.target.value)} /></div>
+                <div><label className="text-[10px] text-muted-foreground">Matrícula</label><input className="input-kiki text-sm" value={editMatricula} onChange={e => setEditMatricula(e.target.value)} /></div>
+                <p className="text-xs text-muted-foreground">Email: {profile?.email}</p>
+                <button onClick={handleSaveProfile} className="btn-primary w-full text-sm flex items-center justify-center gap-2">
+                  <Save size={14} /> Guardar
+                </button>
               </div>
             ) : (
               <>
                 {[
-                  { label: 'Nombre', value: profile?.name },
-                  { label: 'Email', value: profile?.email },
-                  { label: 'Matrícula', value: profile?.matricula || '—' },
-                  { label: 'Institución', value: profile?.institution || '—' },
+                  { label: 'Nombre', value: profile?.name || '-' },
+                  { label: 'Email', value: profile?.email || '-' },
+                  { label: 'Especialidad', value: profile?.specialty || '-' },
+                  { label: 'Institución', value: profile?.institution || '-' },
+                  { label: 'Matrícula', value: profile?.matricula || '-' },
                 ].map(item => (
                   <div key={item.label} className="flex justify-between py-2 border-b border-border last:border-0">
                     <span className="text-sm text-muted-foreground">{item.label}</span>
-                    <span className="text-sm font-medium text-foreground truncate ml-4 text-right">{item.value}</span>
+                    <span className="text-sm font-medium">{item.value}</span>
                   </div>
                 ))}
               </>
@@ -116,105 +139,12 @@ export default function KineProfile() {
 
         {/* Change password */}
         <motion.div variants={stagger.item}>
-          <KikiCard onClick={() => navigate('/change-password')}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center"><Lock size={18} className="text-gold" /></div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">Cambiar contraseña</p>
-                <p className="text-xs text-muted-foreground">Actualizá tu contraseña de acceso</p>
-              </div>
+          <KikiCard onClick={() => navigate('/change-password')} className="cursor-pointer">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Cambiar contraseña</span>
               <ChevronRight size={16} className="text-muted-foreground" />
             </div>
           </KikiCard>
-        </motion.div>
-
-        {/* Notifications */}
-        <motion.div variants={stagger.item}>
-          <KikiCard>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Notificaciones</h3>
-            {[
-              { icon: Bell, label: 'Alertas MAA', key: 'dailyReminder' },
-              { icon: Bell, label: 'Sesiones completadas', key: 'therapistMessages' },
-              { icon: Bell, label: 'Mensajes de cuidadoras', key: 'weeklyReports' },
-            ].map(item => (
-              <div key={item.label} className="flex items-center justify-between py-2.5 border-b border-border last:border-0">
-                <div className="flex items-center gap-2">
-                  <item.icon size={14} className="text-muted-foreground" />
-                  <span className="text-sm">{item.label}</span>
-                </div>
-                <button onClick={() => updateSettings(item.key, !(settings as any)[item.key])}
-                  className={`w-10 h-6 rounded-full relative transition-colors ${(settings as any)[item.key] ? 'bg-mint' : 'bg-muted'}`} aria-label={`Toggle ${item.label}`}>
-                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-card shadow-sm transition-all ${(settings as any)[item.key] ? 'right-1' : 'left-1'}`} />
-                </button>
-              </div>
-            ))}
-          </KikiCard>
-        </motion.div>
-
-        {/* App config */}
-        <motion.div variants={stagger.item}>
-          <KikiCard>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Configuración</h3>
-            <div className="flex items-center justify-between py-2.5 border-b border-border">
-              <div className="flex items-center gap-2">
-                {settings.soundEffects ? <Volume2 size={14} className="text-muted-foreground" /> : <VolumeX size={14} className="text-muted-foreground" />}
-                <span className="text-sm">Sonidos</span>
-              </div>
-              <button onClick={() => updateSettings('soundEffects', !settings.soundEffects)}
-                className={`w-10 h-6 rounded-full relative transition-colors ${settings.soundEffects ? 'bg-mint' : 'bg-muted'}`} aria-label="Toggle sound">
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-card shadow-sm transition-all ${settings.soundEffects ? 'right-1' : 'left-1'}`} />
-              </button>
-            </div>
-            <div className="flex items-center justify-between py-2.5">
-              <div className="flex items-center gap-2"><Globe size={14} className="text-muted-foreground" /><span className="text-sm">Idioma</span></div>
-              <span className="text-sm text-muted-foreground">Español 🇦🇷</span>
-            </div>
-          </KikiCard>
-        </motion.div>
-
-        {/* Plan & Pricing */}
-        <motion.div variants={stagger.item}>
-          <KikiCard onClick={() => setShowPricing(!showPricing)}>
-            <div className="flex items-center justify-between py-1">
-              <div className="flex items-center gap-2">
-                <Crown size={16} className="text-mint-500" />
-                <span className="text-sm font-medium">
-                  {subscription.plan === 'free_trial' ? `Plan gratuito — ${subscription.trialDaysLeft} días restantes` :
-                   subscription.plan === 'inicial' ? 'Plan Inicial — Activo' : 'Plan Pro — Activo'}
-                </span>
-              </div>
-              <ChevronRight size={16} className={`text-muted-foreground transition-transform ${showPricing ? 'rotate-90' : ''}`} />
-            </div>
-          </KikiCard>
-          {showPricing && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2 mt-2">
-              <KikiCard className="border-2 border-mint-200">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-bold">Plan Inicial</h4>
-                  <span className="text-sm font-bold text-mint-600">$12.000/mes</span>
-                </div>
-                <p className="text-xs text-muted-foreground mb-3">Hasta 10 pacientes, biblioteca completa, alertas MAA.</p>
-                <button onClick={() => upgradePlan('inicial')} className={`w-full text-sm py-2 rounded-full font-medium ${subscription.plan === 'inicial' ? 'bg-muted text-muted-foreground' : 'btn-primary'}`}
-                  disabled={subscription.plan === 'inicial'}>
-                  {subscription.plan === 'inicial' ? 'Plan actual' : 'Elegir plan'}
-                </button>
-              </KikiCard>
-              <KikiCard className="border-2 border-gold">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-bold">Plan Pro</h4>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gold text-background font-bold">POPULAR</span>
-                  </div>
-                  <span className="text-sm font-bold text-gold">$20.000/mes</span>
-                </div>
-                <p className="text-xs text-muted-foreground mb-3">Pacientes ilimitados, comunidad, protocolos compartidos, exportar informes.</p>
-                <button onClick={() => upgradePlan('pro')} className={`w-full text-sm py-2 rounded-full font-medium ${subscription.plan === 'pro' ? 'bg-muted text-muted-foreground' : 'bg-gold text-background'}`}
-                  disabled={subscription.plan === 'pro'}>
-                  {subscription.plan === 'pro' ? 'Plan actual' : 'Elegir plan'}
-                </button>
-              </KikiCard>
-            </motion.div>
-          )}
         </motion.div>
 
         {/* Legal */}
@@ -233,8 +163,9 @@ export default function KineProfile() {
           </KikiCard>
         </motion.div>
 
+        {/* Logout */}
         <motion.div variants={stagger.item}>
-          <button onClick={handleLogout} className="w-full text-center py-3 text-sm font-medium text-rust mt-2">
+          <button onClick={handleLogout} className="w-full text-center py-3 text-sm font-medium text-rust">
             <LogOut size={16} className="inline mr-2" /> Cerrar sesión
           </button>
         </motion.div>
@@ -255,12 +186,11 @@ export default function KineProfile() {
               <div className="text-center py-4">
                 <p className="text-2xl mb-2">🙏</p>
                 <h3 className="font-bold text-lg">Gracias por tu comentario</h3>
-                <p className="text-sm text-muted-foreground mt-1">Tu opinión nos ayuda a mejorar KikiCare</p>
               </div>
             ) : (
               <>
                 <h3 className="text-lg font-bold mb-3">Enviar comentarios</h3>
-                <textarea className="input-kiki text-sm min-h-[100px] resize-none" placeholder="Escribí tu comentario, sugerencia o reporte de error…"
+                <textarea className="input-kiki text-sm min-h-[100px] resize-none" placeholder="Escribí tu comentario…"
                   value={feedbackText} onChange={e => setFeedbackText(e.target.value)} />
                 <div className="flex gap-2 mt-3">
                   <button onClick={handleSubmitFeedback} className="btn-primary flex-1 text-sm" disabled={!feedbackText.trim()}>Enviar</button>

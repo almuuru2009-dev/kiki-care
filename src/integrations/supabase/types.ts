@@ -56,6 +56,51 @@ export type Database = {
         }
         Relationships: []
       }
+      exercises: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          duration: number | null
+          id: string
+          is_community: boolean | null
+          name: string
+          reps: string | null
+          sets: number | null
+          target_area: string | null
+          thumbnail_color: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          duration?: number | null
+          id?: string
+          is_community?: boolean | null
+          name: string
+          reps?: string | null
+          sets?: number | null
+          target_area?: string | null
+          thumbnail_color?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          duration?: number | null
+          id?: string
+          is_community?: boolean | null
+          name?: string
+          reps?: string | null
+          sets?: number | null
+          target_area?: string | null
+          thumbnail_color?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       feedback: {
         Row: {
           created_at: string
@@ -79,6 +124,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          link_id: string | null
+          read: boolean
+          receiver_id: string
+          sender_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          link_id?: string | null
+          read?: boolean
+          receiver_id: string
+          sender_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          link_id?: string | null
+          read?: boolean
+          receiver_id?: string
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "therapist_caregiver_links"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -118,6 +201,50 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      sessions: {
+        Row: {
+          caregiver_id: string
+          child_id: string
+          child_mood: number | null
+          completed_at: string
+          created_at: string
+          difficulty: number | null
+          id: string
+          note: string | null
+          pain_reported: boolean | null
+        }
+        Insert: {
+          caregiver_id: string
+          child_id: string
+          child_mood?: number | null
+          completed_at?: string
+          created_at?: string
+          difficulty?: number | null
+          id?: string
+          note?: string | null
+          pain_reported?: boolean | null
+        }
+        Update: {
+          caregiver_id?: string
+          child_id?: string
+          child_mood?: number | null
+          completed_at?: string
+          created_at?: string
+          difficulty?: number | null
+          id?: string
+          note?: string | null
+          pain_reported?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sessions_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       therapist_caregiver_links: {
         Row: {
@@ -159,6 +286,51 @@ export type Database = {
             columns: ["child_id"]
             isOneToOne: false
             referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      treatment_plans: {
+        Row: {
+          active: boolean | null
+          child_id: string
+          created_at: string
+          day_of_week: number[] | null
+          exercise_id: string
+          id: string
+          therapist_id: string
+        }
+        Insert: {
+          active?: boolean | null
+          child_id: string
+          created_at?: string
+          day_of_week?: number[] | null
+          exercise_id: string
+          id?: string
+          therapist_id: string
+        }
+        Update: {
+          active?: boolean | null
+          child_id?: string
+          created_at?: string
+          day_of_week?: number[] | null
+          exercise_id?: string
+          id?: string
+          therapist_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treatment_plans_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treatment_plans_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
             referencedColumns: ["id"]
           },
         ]

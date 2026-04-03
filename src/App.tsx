@@ -76,7 +76,7 @@ const App = () => (
               <Route path="/cuidadora/session" element={<SessionPlayer />} />
               <Route path="/cuidadora/progress" element={<ProgressScreen />} />
               <Route path="/cuidadora/messages" element={<CuidadoraMessages />} />
-              <Route path="/cuidadora/messages/conversation" element={<ConversationScreen />} />
+              <Route path="/cuidadora/messages/:id" element={<ConversationScreen />} />
               <Route path="/cuidadora/child" element={<ChildProfile />} />
               <Route path="/cuidadora/medals" element={<MedalsScreen />} />
 
