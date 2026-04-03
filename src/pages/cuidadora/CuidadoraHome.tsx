@@ -1,29 +1,99 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Calendar, MessageCircle, ChevronRight, Heart } from 'lucide-react';
+import { Calendar, Heart, PlayCircle } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { KikiCard } from '@/components/kiki/KikiComponents';
-import { ExerciseCard } from '@/components/kiki/ExerciseCard';
-import { useAppStore } from '@/stores/useAppStore';
 import { useAuthContext } from '@/contexts/AuthContext';
-import kikiGlasses from '@/assets/kiki-glasses.png';
+import { supabase } from '@/integrations/supabase/client';
 
 const stagger = {
   container: { transition: { staggerChildren: 0.08 } },
   item: { initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.4 } },
 };
 
+interface ChildExercise {
+  id: string;
+  name: string;
+  duration: number;
+  sets: number;
+  reps: string;
+  target_area: string | null;
+  thumbnail_color: string;
+}
+
 export default function CuidadoraHome() {
   const navigate = useNavigate();
-  const { profile } = useAuthContext();
-  const { exercises, todaySessionCompleted, conversations } = useAppStore();
+  const { user, profile } = useAuthContext();
   const firstName = profile?.name?.split(' ')[0] || 'Cuidador/a';
   const greeting = new Date().getHours() < 12 ? '☀️' : new Date().getHours() < 18 ? '🌤' : '🌙';
-  const todayExercises = exercises.slice(0, 3);
-  const unread = conversations.find(c => c.id === 'conv-1')?.unreadCount || 0;
-  const totalTime = todayExercises.reduce((s, e) => s + e.duration, 0);
-  const completedCount = todaySessionCompleted ? todayExercises.length : 0;
-  const hasExercises = todayExercises.length > 0;
+
+  const [exercises, setExercises] = useState<ChildExercise[]>([]);
+  const [todayCompleted, setTodayCompleted] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) loadData();
+  }, [user]);
+
+  const loadData = async () => {
+    if (!user) return;
+
+    // Get child
+    const { data: children } = await supabase
+      .from('children')
+      .select('id')
+      .eq('caregiver_id', user.id)
+      .limit(1);
+
+    if (children && children.length > 0) {
+      const childId = children[0].id;
+
+      // Get treatment plans with exercises
+      const { data: plans } = await supabase
+        .from('treatment_plans')
+        .select('exercise_id')
+        .eq('child_id', childId)
+        .eq('active', true);
+
+      if (plans && plans.length > 0) {
+        const exerciseIds = plans.map(p => p.exercise_id);
+        const { data: exData } = await supabase
+          .from('exercises')
+          .select('*')
+          .in('id', exerciseIds);
+
+        if (exData) {
+          setExercises(exData.map(e => ({
+            id: e.id,
+            name: e.name,
+            duration: e.duration || 5,
+            sets: e.sets || 3,
+            reps: e.reps || '10 repeticiones',
+            target_area: e.target_area,
+            thumbnail_color: e.thumbnail_color || '#7EEDC4',
+          })));
+        }
+      }
+
+      // Check if session completed today
+      const today = new Date().toISOString().split('T')[0];
+      const { count } = await supabase
+        .from('sessions')
+        .select('*', { count: 'exact', head: true })
+        .eq('child_id', childId)
+        .eq('caregiver_id', user.id)
+        .gte('completed_at', today + 'T00:00:00')
+        .lte('completed_at', today + 'T23:59:59');
+
+      setTodayCompleted((count || 0) > 0);
+    }
+
+    setLoading(false);
+  };
+
+  const hasExercises = exercises.length > 0;
+  const totalTime = exercises.reduce((s, e) => s + e.duration, 0);
 
   return (
     <AppShell>
@@ -35,8 +105,11 @@ export default function CuidadoraHome() {
           </p>
         </motion.div>
 
-        {!hasExercises ? (
-          /* Empty state for new caregivers */
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-8 h-8 border-2 border-mint border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : !hasExercises ? (
           <motion.div variants={stagger.item}>
             <KikiCard className="text-center py-8">
               <div className="w-16 h-16 rounded-full bg-mint-50 flex items-center justify-center mx-auto mb-4">
@@ -55,46 +128,32 @@ export default function CuidadoraHome() {
           <>
             {/* Plan de hoy */}
             <motion.div variants={stagger.item}>
-              <div className="rounded-xl p-4 mb-4 bg-gradient-to-r from-mint-300 to-mint-200 relative overflow-hidden">
-                <motion.img
-                  src={kikiGlasses}
-                  alt="Kiki"
-                  className="absolute -right-2 -bottom-3 w-28 h-28 object-contain"
-                  animate={{ y: [0, -5, 0], rotate: [0, 2, -2, 0] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                />
-                <div className="relative z-10">
-                  <h2 className="text-base font-bold text-navy mb-1">Plan de hoy</h2>
-                  <p className="text-sm text-navy/80">{todayExercises.length} ejercicios · ~{totalTime} minutos</p>
-                  <div className="w-3/4 h-2 rounded-full bg-navy/10 mt-2 mb-1">
-                    <div className="h-2 rounded-full bg-navy/40 transition-all" style={{ width: `${(completedCount / todayExercises.length) * 100}%` }} />
-                  </div>
-                  <p className="text-xs text-navy/60">{completedCount}/{todayExercises.length} completados</p>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Today's routine */}
-            <motion.div variants={stagger.item}>
-              <KikiCard className={todaySessionCompleted ? 'bg-mint-50 border border-mint-200' : ''}>
-                {todaySessionCompleted ? (
+              <KikiCard className={todayCompleted ? 'bg-mint-50 border border-mint-200' : ''}>
+                {todayCompleted ? (
                   <div className="text-center py-4">
-                    <motion.div className="w-12 h-12 rounded-full bg-mint flex items-center justify-center mx-auto mb-2"
-                      initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200 }}>
+                    <div className="w-12 h-12 rounded-full bg-mint flex items-center justify-center mx-auto mb-2">
                       <svg className="w-6 h-6 text-navy" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
-                    </motion.div>
+                    </div>
                     <p className="font-semibold text-foreground">Sesión completada</p>
                     <p className="text-xs text-muted-foreground mt-1">¡Buen trabajo hoy!</p>
                   </div>
                 ) : (
                   <>
-                    <h2 className="text-base font-semibold mb-1">Rutina de hoy</h2>
-                    <p className="text-xs text-muted-foreground mb-3">{todayExercises.length} ejercicios · ~{totalTime} minutos</p>
+                    <h2 className="text-base font-semibold mb-1">Plan de hoy</h2>
+                    <p className="text-xs text-muted-foreground mb-3">{exercises.length} ejercicios · ~{totalTime} minutos</p>
                     <div className="space-y-2 mb-4">
-                      {todayExercises.map(ex => (
-                        <ExerciseCard key={ex.id} name={ex.name} duration={ex.duration} sets={ex.sets} reps={ex.reps} thumbnailColor={ex.thumbnailColor} targetArea={ex.targetArea} />
+                      {exercises.map(ex => (
+                        <div key={ex.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/50">
+                          <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: ex.thumbnail_color + '30' }}>
+                            <PlayCircle size={18} style={{ color: ex.thumbnail_color }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{ex.name}</p>
+                            <p className="text-[10px] text-muted-foreground">{ex.sets} series · {ex.reps} · {ex.duration} min</p>
+                          </div>
+                        </div>
                       ))}
                     </div>
                     <button onClick={() => navigate('/cuidadora/session')} className="btn-primary w-full text-sm">
@@ -118,35 +177,6 @@ export default function CuidadoraHome() {
               </div>
             </div>
           </KikiCard>
-        </motion.div>
-
-        {/* Unread message */}
-        {unread > 0 && (
-          <motion.div variants={stagger.item} className="mt-3">
-            <KikiCard className="bg-amber-50 border border-amber-100 cursor-pointer" onClick={() => navigate('/cuidadora/messages/conversation')}>
-              <div className="flex items-center gap-3">
-                <MessageCircle size={18} className="text-gold" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Mensaje nuevo</p>
-                  <p className="text-xs text-muted-foreground">Toca para responder</p>
-                </div>
-                <ChevronRight size={16} className="text-muted-foreground" />
-              </div>
-            </KikiCard>
-          </motion.div>
-        )}
-
-        {/* Kiki daily tip */}
-        <motion.div variants={stagger.item} className="mt-4">
-          <div className="flex items-start gap-3 bg-mint-50/60 border border-mint-100 rounded-xl p-3">
-            <img src={kikiGlasses} alt="Kiki" className="w-10 h-10 object-contain shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-navy">💡 Tip del día</p>
-              <p className="text-[11px] text-navy/70 mt-0.5">
-                Hacer los ejercicios a la misma hora cada día ayuda a crear el hábito. ¡Se acostumbrará más rápido! 🕐
-              </p>
-            </div>
-          </div>
         </motion.div>
       </motion.div>
     </AppShell>
