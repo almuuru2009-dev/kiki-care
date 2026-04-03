@@ -17,9 +17,9 @@ const kineItems = [
 
 const caregiverItems = [
   { icon: Home, label: 'Inicio', path: '/cuidadora/home' },
-  { icon: Trophy, label: 'Medallas', path: '/cuidadora/medals' },
   { icon: TrendingUp, label: 'Progreso', path: '/cuidadora/progress' },
   { icon: MessageCircle, label: 'Mensajes', path: '/cuidadora/messages' },
+  { icon: Trophy, label: 'Medallas', path: '/cuidadora/medals' },
   { icon: User, label: 'Perfil', path: '/cuidadora/child' },
 ];
 
