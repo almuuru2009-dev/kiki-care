@@ -166,11 +166,8 @@ export default function ExerciseLibraryScreen() {
   );
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <AppShell>
       <div className="px-4 pt-4 flex items-center gap-3">
-        <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full bg-muted flex items-center justify-center md:hidden" aria-label="Volver">
-          <ArrowLeft size={20} />
-        </button>
         <h1 className="text-lg font-semibold flex-1">Biblioteca</h1>
         <button onClick={() => navigate('/kine/exercises/create')} className="btn-primary text-xs py-2 px-3">
           <Plus size={12} className="inline mr-1" /> Crear ejercicio
