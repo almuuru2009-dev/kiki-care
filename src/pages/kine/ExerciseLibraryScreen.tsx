@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, Search, X, Star, BookOpen, Users, Bookmark, Check, ChevronRight } from 'lucide-react';
+import { Plus, Search, X, Star, BookOpen, Users, Bookmark, Check, ChevronRight } from 'lucide-react';
 import { KikiCard } from '@/components/kiki/KikiComponents';
+import { AppShell } from '@/components/layout/AppShell';
 
 const tabs = ['Mis ejercicios', 'Comunidad', 'Protocolos', 'Guardados'];
 
