@@ -274,6 +274,6 @@ export default function ExerciseLibraryScreen() {
       {selectedExercise && (
         <ExerciseDetailPanel item={selectedExercise} onClose={() => setSelectedExercise(null)} />
       )}
-    </div>
+    </AppShell>
   );
 }
