@@ -33,8 +33,6 @@ export function BottomNav({ role, currentPath }: BottomNavProps) {
         {items.map(item => {
           const isActive = currentPath.startsWith(item.path);
           const Icon = item.icon;
-          let badge = 0;
-          if (item.label === 'Mensajes') badge = unreadMessages;
 
           return (
             <button
