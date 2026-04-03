@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom';
 import { Home, Users, MessageCircle, User, TrendingUp, Trophy, BookOpen } from 'lucide-react';
-import { useAppStore } from '@/stores/useAppStore';
 import { cn } from '@/lib/utils';
 
 interface BottomNavProps {
