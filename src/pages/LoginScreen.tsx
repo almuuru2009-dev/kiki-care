@@ -100,7 +100,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <div className="mobile-frame flex flex-col min-h-screen bg-background">
+    <div className="flex flex-col min-h-screen bg-background max-w-[500px] mx-auto">
       <div className="px-4 pt-4">
         <button
           onClick={() => navigate('/role-select')}

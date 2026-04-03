@@ -140,7 +140,7 @@ export default function RegisterScreen() {
   };
 
   return (
-    <div className="mobile-frame flex flex-col min-h-screen bg-background">
+    <div className="flex flex-col min-h-screen bg-background max-w-[500px] mx-auto">
       <div className="px-4 pt-4 flex items-center gap-3">
         <button onClick={() => step > 1 ? setStep(step - 1) : navigate(-1)}
           className="w-9 h-9 rounded-full bg-muted flex items-center justify-center" aria-label="Volver">
