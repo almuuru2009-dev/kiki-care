@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Send, LogOut, Bell, BellOff, Mail, ChevronRight, Settings, Volume2, VolumeX, Edit2, HelpCircle, Shield, Globe, MessageSquarePlus, UserMinus, UserPlus, Save, X } from 'lucide-react';
+import { Send, LogOut, Bell, BellOff, Mail, ChevronRight, Edit2, HelpCircle, Shield, Globe, MessageSquarePlus, UserMinus, Save, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
-import { useAppStore } from '@/stores/useAppStore';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -29,30 +28,22 @@ interface TherapistLink {
 
 export default function ChildProfile() {
   const navigate = useNavigate();
-  const { settings, updateSettings, submitFeedback } = useAppStore();
-  const { user, profile, signOut } = useAuthContext();
+  const { user, profile, signOut, updateProfile } = useAuthContext();
 
-  // Real data state
   const [child, setChild] = useState<ChildData | null>(null);
   const [therapistLink, setTherapistLink] = useState<TherapistLink | null>(null);
   const [loadingData, setLoadingData] = useState(true);
 
-  // Child editing state
   const [editingChild, setEditingChild] = useState(false);
   const [childName, setChildName] = useState('');
   const [childAge, setChildAge] = useState('');
   const [childDiagnosis, setChildDiagnosis] = useState('');
   const [childGmfcs, setChildGmfcs] = useState('');
 
-  // Account editing
   const [editingAccount, setEditingAccount] = useState(false);
   const [editName, setEditName] = useState('');
-  const [editEmail, setEditEmail] = useState('');
 
-  // Therapist section
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
-
-  // Feedback
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
@@ -61,14 +52,12 @@ export default function ChildProfile() {
     if (user) {
       loadData();
       setEditName(profile?.name || '');
-      setEditEmail(profile?.email || user.email || '');
     }
   }, [user, profile]);
 
   const loadData = async () => {
     if (!user) return;
 
-    // Load children
     const { data: children } = await supabase
       .from('children')
       .select('*')
@@ -84,7 +73,6 @@ export default function ChildProfile() {
       setChildGmfcs(c.gmfcs?.toString() || '');
     }
 
-    // Load therapist link
     const { data: links } = await supabase
       .from('therapist_caregiver_links')
       .select('id, therapist_id')
@@ -112,10 +100,7 @@ export default function ChildProfile() {
     setLoadingData(false);
   };
 
-  const handleLogout = async () => {
-    await signOut();
-    navigate('/');
-  };
+  const handleLogout = async () => { await signOut(); navigate('/'); };
 
   const handleSaveChild = async () => {
     if (!child) return;
@@ -141,11 +126,7 @@ export default function ChildProfile() {
 
   const handleSaveAccount = async () => {
     if (!user) return;
-    const { error } = await supabase
-      .from('profiles')
-      .update({ name: editName, updated_at: new Date().toISOString() })
-      .eq('id', user.id);
-
+    const { error } = await updateProfile({ name: editName });
     if (error) {
       toast.error('Error al guardar');
     } else {
@@ -172,15 +153,9 @@ export default function ChildProfile() {
 
   const handleSubmitFeedback = async () => {
     if (!feedbackText.trim() || !user) return;
-    const { error } = await supabase.from('feedback').insert({
-      user_id: user.id,
-      text: feedbackText,
-      type: 'comment',
-    });
-    if (!error) {
-      setFeedbackSent(true);
-      setTimeout(() => { setShowFeedback(false); setFeedbackSent(false); setFeedbackText(''); }, 2000);
-    }
+    await supabase.from('feedback').insert({ user_id: user.id, text: feedbackText, type: 'comment' });
+    setFeedbackSent(true);
+    setTimeout(() => { setShowFeedback(false); setFeedbackSent(false); setFeedbackText(''); }, 2000);
   };
 
   const stagger = {
@@ -210,8 +185,8 @@ export default function ChildProfile() {
               animate={{ y: [0, -4, 0] }} transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }} />
           </div>
           <h2 className="text-xl font-bold">{child?.name || 'Mi niño'}</h2>
-          {child && <p className="text-sm text-muted-foreground">{child.age} años · {child.diagnosis}</p>}
-          {child && (
+          {child && <p className="text-sm text-muted-foreground">{child.age ? `${child.age} años` : ''}{child.diagnosis ? ` · ${child.diagnosis}` : ''}</p>}
+          {child?.gmfcs && (
             <div className="flex gap-2 mt-2">
               <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-muted">GMFCS Nivel {child.gmfcs}</span>
             </div>
@@ -243,8 +218,11 @@ export default function ChildProfile() {
                     <input className="input-kiki text-sm" value={childName} onChange={e => setChildName(e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-[10px] text-muted-foreground font-medium">Edad</label>
-                    <input className="input-kiki text-sm" type="number" value={childAge} onChange={e => setChildAge(e.target.value)} />
+                    <label className="text-[10px] text-muted-foreground font-medium">Edad (0-18)</label>
+                    <input className="input-kiki text-sm" type="number" min="0" max="18" value={childAge} onChange={e => {
+                      const v = e.target.value;
+                      if (v === '' || (parseInt(v) >= 0 && parseInt(v) <= 18)) setChildAge(v);
+                    }} />
                   </div>
                   <div>
                     <label className="text-[10px] text-muted-foreground font-medium">Diagnóstico</label>
@@ -317,7 +295,7 @@ export default function ChildProfile() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
-                  <button onClick={() => navigate('/cuidadora/messages/conversation')} className="btn-secondary flex-1 text-sm">
+                  <button onClick={() => navigate(`/cuidadora/messages/${therapistLink.therapist_id}`)} className="btn-secondary flex-1 text-sm">
                     <Send size={14} className="inline mr-1" /> Mensaje
                   </button>
                   <button onClick={() => setShowUnlinkConfirm(true)} className="flex-1 text-sm py-2 rounded-xl border border-red-200 text-rust font-medium flex items-center justify-center gap-1">
@@ -339,7 +317,7 @@ export default function ChildProfile() {
           <KikiCard>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mi cuenta</h3>
-              <button onClick={() => { setEditingAccount(!editingAccount); setEditName(profile?.name || ''); setEditEmail(profile?.email || ''); }}
+              <button onClick={() => { setEditingAccount(!editingAccount); setEditName(profile?.name || ''); }}
                 className="text-xs text-mint-500 font-medium flex items-center gap-1">
                 {editingAccount ? <><X size={12} /> Cancelar</> : <><Edit2 size={12} /> Editar</>}
               </button>
@@ -366,43 +344,12 @@ export default function ChildProfile() {
           </KikiCard>
         </motion.div>
 
-        {/* Notification settings */}
+        {/* Change password */}
         <motion.div variants={stagger.item}>
-          <KikiCard>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Notificaciones</h3>
-            {[
-              { icon: Bell, label: 'Recordatorio diario', key: 'dailyReminder' },
-              { icon: Mail, label: 'Mensajes del kinesiólogo', key: 'therapistMessages' },
-              { icon: BellOff, label: 'Informes semanales', key: 'weeklyReports' },
-            ].map(item => (
-              <div key={item.label} className="flex items-center justify-between py-2.5 border-b border-border last:border-0">
-                <div className="flex items-center gap-2"><item.icon size={14} className="text-muted-foreground" /><span className="text-sm">{item.label}</span></div>
-                <button onClick={() => updateSettings(item.key, !(settings as any)[item.key])}
-                  className={`w-10 h-6 rounded-full relative transition-colors ${(settings as any)[item.key] ? 'bg-mint' : 'bg-muted'}`}>
-                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-card shadow-sm transition-all ${(settings as any)[item.key] ? 'right-1' : 'left-1'}`} />
-                </button>
-              </div>
-            ))}
-          </KikiCard>
-        </motion.div>
-
-        {/* App settings */}
-        <motion.div variants={stagger.item}>
-          <KikiCard>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Configuración</h3>
-            <div className="flex items-center justify-between py-2.5 border-b border-border">
-              <div className="flex items-center gap-2">
-                {settings.soundEffects ? <Volume2 size={14} className="text-muted-foreground" /> : <VolumeX size={14} className="text-muted-foreground" />}
-                <span className="text-sm">Efectos de sonido</span>
-              </div>
-              <button onClick={() => updateSettings('soundEffects', !settings.soundEffects)}
-                className={`w-10 h-6 rounded-full relative transition-colors ${settings.soundEffects ? 'bg-mint' : 'bg-muted'}`}>
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-card shadow-sm transition-all ${settings.soundEffects ? 'right-1' : 'left-1'}`} />
-              </button>
-            </div>
-            <div className="flex items-center justify-between py-2.5">
-              <div className="flex items-center gap-2"><Settings size={14} className="text-muted-foreground" /><span className="text-sm">Idioma</span></div>
-              <span className="text-sm text-muted-foreground">Español 🇦🇷</span>
+          <KikiCard onClick={() => navigate('/change-password')} className="cursor-pointer">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Cambiar contraseña</span>
+              <ChevronRight size={16} className="text-muted-foreground" />
             </div>
           </KikiCard>
         </motion.div>
@@ -438,18 +385,18 @@ export default function ChildProfile() {
         </motion.div>
       </motion.div>
 
-      {/* Unlink confirmation modal */}
+      {/* Unlink confirmation */}
       {showUnlinkConfirm && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-6" onClick={() => setShowUnlinkConfirm(false)}>
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6" onClick={() => setShowUnlinkConfirm(false)}>
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
             className="bg-card rounded-2xl p-6 w-full max-w-[340px] shadow-kiki-lg" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-2">¿Desvincular kinesiólogo?</h3>
+            <h3 className="font-bold text-base mb-2">¿Desvincular kinesiólogo?</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Si te desvinculás, tu kinesiólogo ya no podrá ver el progreso del niño ni enviarte planes de ejercicios. Podés vincular uno nuevo después.
+              Se archivará el vínculo con {therapistLink?.therapist_name}. Podés solicitar una nueva vinculación después.
             </p>
             <div className="flex gap-2">
-              <button onClick={handleUnlink} className="flex-1 py-2.5 rounded-xl bg-red-50 text-rust text-sm font-medium">Desvincular</button>
-              <button onClick={() => setShowUnlinkConfirm(false)} className="flex-1 py-2.5 rounded-xl bg-muted text-sm font-medium">Cancelar</button>
+              <button onClick={handleUnlink} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white bg-rust">Sí, desvincular</button>
+              <button onClick={() => setShowUnlinkConfirm(false)} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground">Cancelar</button>
             </div>
           </motion.div>
         </div>
@@ -463,12 +410,11 @@ export default function ChildProfile() {
               <div className="text-center py-4">
                 <p className="text-2xl mb-2">🙏</p>
                 <h3 className="font-bold text-lg">Gracias por tu comentario</h3>
-                <p className="text-sm text-muted-foreground mt-1">Tu opinión nos ayuda a mejorar KikiCare</p>
               </div>
             ) : (
               <>
                 <h3 className="text-lg font-bold mb-3">Enviar comentarios</h3>
-                <textarea className="input-kiki text-sm min-h-[100px] resize-none" placeholder="Escribí tu comentario, sugerencia o reporte de error…"
+                <textarea className="input-kiki text-sm min-h-[100px] resize-none" placeholder="Escribí tu comentario…"
                   value={feedbackText} onChange={e => setFeedbackText(e.target.value)} />
                 <div className="flex gap-2 mt-3">
                   <button onClick={handleSubmitFeedback} className="btn-primary flex-1 text-sm" disabled={!feedbackText.trim()}>Enviar</button>
