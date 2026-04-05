@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 
 import SplashScreen from "./pages/SplashScreen";
 import RoleSelectScreen from "./pages/RoleSelectScreen";
@@ -46,8 +47,9 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <div className="min-h-screen bg-navy-900 flex items-start justify-center">
+          <div className="min-h-screen bg-background">
             <Routes>
+              {/* Public routes */}
               <Route path="/" element={<SplashScreen />} />
               <Route path="/role-select" element={<RoleSelectScreen />} />
               <Route path="/login" element={<LoginScreen />} />
@@ -57,28 +59,30 @@ const App = () => (
               <Route path="/faq" element={<FAQScreen />} />
               <Route path="/terms" element={<TermsScreen />} />
               <Route path="/privacy" element={<PrivacyScreen />} />
-              <Route path="/pending-invitations" element={<PendingInvitationsScreen />} />
+              <Route path="/pending-invitations" element={<ProtectedRoute><PendingInvitationsScreen /></ProtectedRoute>} />
 
-              <Route path="/kine/home" element={<KineHome />} />
-              <Route path="/kine/patients" element={<PatientList />} />
-              <Route path="/kine/patients/:id" element={<PatientDetail />} />
-              <Route path="/kine/patients/:id/plan/edit" element={<EditPlanScreen />} />
-              <Route path="/kine/patients/:id/pre-report" element={<PatientDetail />} />
-              <Route path="/kine/alerts" element={<AlertsScreen />} />
-              <Route path="/kine/messages" element={<MessageList />} />
-              <Route path="/kine/messages/:id" element={<ConversationScreen />} />
-              <Route path="/kine/profile" element={<KineProfile />} />
-              <Route path="/kine/exercises" element={<ExerciseLibraryScreen />} />
-              <Route path="/kine/exercises/create" element={<CreateExerciseScreen />} />
-              <Route path="/kine/protocols/create" element={<CreateProtocolScreen />} />
+              {/* Kine routes - protected, kinesiologist only */}
+              <Route path="/kine/home" element={<ProtectedRoute allowedRole="kinesiologist"><KineHome /></ProtectedRoute>} />
+              <Route path="/kine/patients" element={<ProtectedRoute allowedRole="kinesiologist"><PatientList /></ProtectedRoute>} />
+              <Route path="/kine/patients/:id" element={<ProtectedRoute allowedRole="kinesiologist"><PatientDetail /></ProtectedRoute>} />
+              <Route path="/kine/patients/:id/plan/edit" element={<ProtectedRoute allowedRole="kinesiologist"><EditPlanScreen /></ProtectedRoute>} />
+              <Route path="/kine/patients/:id/pre-report" element={<ProtectedRoute allowedRole="kinesiologist"><PatientDetail /></ProtectedRoute>} />
+              <Route path="/kine/alerts" element={<ProtectedRoute allowedRole="kinesiologist"><AlertsScreen /></ProtectedRoute>} />
+              <Route path="/kine/messages" element={<ProtectedRoute allowedRole="kinesiologist"><MessageList /></ProtectedRoute>} />
+              <Route path="/kine/messages/:id" element={<ProtectedRoute allowedRole="kinesiologist"><ConversationScreen /></ProtectedRoute>} />
+              <Route path="/kine/profile" element={<ProtectedRoute allowedRole="kinesiologist"><KineProfile /></ProtectedRoute>} />
+              <Route path="/kine/exercises" element={<ProtectedRoute allowedRole="kinesiologist"><ExerciseLibraryScreen /></ProtectedRoute>} />
+              <Route path="/kine/exercises/create" element={<ProtectedRoute allowedRole="kinesiologist"><CreateExerciseScreen /></ProtectedRoute>} />
+              <Route path="/kine/protocols/create" element={<ProtectedRoute allowedRole="kinesiologist"><CreateProtocolScreen /></ProtectedRoute>} />
 
-              <Route path="/cuidadora/home" element={<CuidadoraHome />} />
-              <Route path="/cuidadora/session" element={<SessionPlayer />} />
-              <Route path="/cuidadora/progress" element={<ProgressScreen />} />
-              <Route path="/cuidadora/messages" element={<CuidadoraMessages />} />
-              <Route path="/cuidadora/messages/:id" element={<ConversationScreen />} />
-              <Route path="/cuidadora/child" element={<ChildProfile />} />
-              <Route path="/cuidadora/medals" element={<MedalsScreen />} />
+              {/* Cuidadora routes - protected, caregiver only */}
+              <Route path="/cuidadora/home" element={<ProtectedRoute allowedRole="caregiver"><CuidadoraHome /></ProtectedRoute>} />
+              <Route path="/cuidadora/session" element={<ProtectedRoute allowedRole="caregiver"><SessionPlayer /></ProtectedRoute>} />
+              <Route path="/cuidadora/progress" element={<ProtectedRoute allowedRole="caregiver"><ProgressScreen /></ProtectedRoute>} />
+              <Route path="/cuidadora/messages" element={<ProtectedRoute allowedRole="caregiver"><CuidadoraMessages /></ProtectedRoute>} />
+              <Route path="/cuidadora/messages/:id" element={<ProtectedRoute allowedRole="caregiver"><ConversationScreen /></ProtectedRoute>} />
+              <Route path="/cuidadora/child" element={<ProtectedRoute allowedRole="caregiver"><ChildProfile /></ProtectedRoute>} />
+              <Route path="/cuidadora/medals" element={<ProtectedRoute allowedRole="caregiver"><MedalsScreen /></ProtectedRoute>} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>

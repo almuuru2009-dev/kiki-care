@@ -15,6 +15,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [roleMessage, setRoleMessage] = useState('');
 
   // If already logged in, redirect based on DB role
   useEffect(() => {
@@ -25,11 +26,13 @@ export default function LoginScreen() {
 
   const redirectByRole = async (role: string) => {
     if (role === 'kinesiologist') {
-      navigate('/kine/home', { replace: true });
+      setRoleMessage('Iniciando como kinesiólogo...');
+      setTimeout(() => navigate('/kine/home', { replace: true }), 600);
     } else {
+      setRoleMessage('Iniciando como cuidador...');
       // Check for pending invitations
       if (!user?.email) {
-        navigate('/cuidadora/home', { replace: true });
+        setTimeout(() => navigate('/cuidadora/home', { replace: true }), 600);
         return;
       }
       const { data } = await supabase
@@ -40,7 +43,7 @@ export default function LoginScreen() {
         .limit(1);
 
       if (data && data.length > 0) {
-        navigate('/pending-invitations', { replace: true });
+        setTimeout(() => navigate('/pending-invitations', { replace: true }), 600);
       } else {
         // Check for pending child data from registration
         const pendingChild = localStorage.getItem('kikicare_pending_child');
@@ -59,7 +62,7 @@ export default function LoginScreen() {
             console.error('Error creating child:', e);
           }
         }
-        navigate('/cuidadora/home', { replace: true });
+        setTimeout(() => navigate('/cuidadora/home', { replace: true }), 600);
       }
     }
   };
@@ -91,8 +94,25 @@ export default function LoginScreen() {
     setLoading(false);
   };
 
+  // Show role transition message
+  if (roleMessage) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background max-w-[420px] mx-auto">
+        <img src={kikiMascot} alt="Kiki" className="w-20 h-20 object-contain mb-4" />
+        <motion.p
+          className="text-lg font-semibold text-foreground"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          {roleMessage}
+        </motion.p>
+        <div className="w-6 h-6 border-2 border-mint border-t-transparent rounded-full animate-spin mt-4" />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col min-h-screen bg-background max-w-[500px] mx-auto">
+    <div className="flex flex-col min-h-screen bg-background max-w-[420px] mx-auto">
       <div className="px-4 pt-4">
         <button
           onClick={() => navigate('/role-select')}
@@ -172,6 +192,12 @@ export default function LoginScreen() {
             Registrate
           </button>
         </p>
+
+        {/* Demo credentials */}
+        <div className="mt-6 text-center">
+          <p className="text-[10px] text-muted-foreground/60">Demo: kine@kikiapp.com / #Demo1234</p>
+          <p className="text-[10px] text-muted-foreground/60">Demo: caregiver@kikicare.com / #Demo1234</p>
+        </div>
       </motion.div>
     </div>
   );
