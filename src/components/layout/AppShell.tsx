@@ -26,10 +26,9 @@ export function AppShell({ children, hideNav }: AppShellProps) {
         </div>
       )}
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-h-screen max-w-[900px] mx-auto w-full">
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+      {/* Main content - centered, max 420px on mobile, wider on desktop with sidebar */}
+      <div className="flex-1 flex flex-col min-h-screen w-full">
+        <div className="flex-1 w-full max-w-[420px] mx-auto overflow-y-auto overflow-x-hidden">
           {children}
         </div>
 

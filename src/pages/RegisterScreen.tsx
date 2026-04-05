@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Check, AlertCircle, X } from 'lucide-react';
-import { useAppStore } from '@/stores/useAppStore';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { KikiCard } from '@/components/kiki/KikiComponents';
@@ -16,9 +15,8 @@ const passwordRules = [
 
 export default function RegisterScreen() {
   const navigate = useNavigate();
-  const { selectedRole } = useAppStore();
   const [step, setStep] = useState(1);
-  const [role, setRole] = useState<'kinesiologist' | 'caregiver'>(selectedRole || 'caregiver');
+  const [role, setRole] = useState<'kinesiologist' | 'caregiver'>('caregiver');
   const [formData, setFormData] = useState({
     name: '', email: '', password: '', confirmPassword: '',
     specialty: '', institution: '', matricula: '',
@@ -29,19 +27,18 @@ export default function RegisterScreen() {
   const [done, setDone] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [checkingEmail, setCheckingEmail] = useState(false);
 
-  // Modal states for terms/privacy viewing
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   const handleChange = (field: string, value: string) => {
-    // Enforce password max length
     if (field === 'password' && value.length > 20) return;
     setFormData(prev => ({ ...prev, [field]: value }));
     setErrors(prev => ({ ...prev, [field]: '' }));
   };
 
-  const validateStep1 = () => {
+  const validateStep1 = async () => {
     const e: Record<string, string> = {};
     if (!formData.name.trim()) e.name = 'Ingresá tu nombre';
     if (!formData.email.trim()) e.email = 'Ingresá tu email';
@@ -53,7 +50,29 @@ export default function RegisterScreen() {
     }
     if (formData.password !== formData.confirmPassword) e.confirmPassword = 'Las contraseñas no coinciden';
     setErrors(e);
-    return Object.keys(e).length === 0;
+    if (Object.keys(e).length > 0) return false;
+
+    // Check email availability on step 1
+    setCheckingEmail(true);
+    try {
+      const { data } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: { data: { _check_only: 'true' } },
+      });
+      // If identities is empty, user already exists
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        setErrors({ email: 'Este correo ya está en uso. Intentá iniciar sesión.' });
+        setCheckingEmail(false);
+        return false;
+      }
+      // Clean up the dummy signup - sign out silently
+      await supabase.auth.signOut();
+    } catch {
+      // If error, email might already exist
+    }
+    setCheckingEmail(false);
+    return true;
   };
 
   const validateStep2Kine = () => {
@@ -96,10 +115,9 @@ export default function RegisterScreen() {
     });
 
     if (error) {
-      // Handle specific errors
       if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already been registered') || error.message.toLowerCase().includes('user already registered')) {
         setErrors({ email: 'Este correo ya está en uso. Intentá iniciar sesión.' });
-        setStep(1); // Go back to step 1 to show the error
+        setStep(1);
       } else {
         toast.error(error.message);
       }
@@ -107,7 +125,6 @@ export default function RegisterScreen() {
       return;
     }
 
-    // Check if user was created but identity already exists (Supabase returns user with empty identities for duplicate emails)
     if (data.user && data.user.identities && data.user.identities.length === 0) {
       setErrors({ email: 'Este correo ya está en uso. Intentá iniciar sesión.' });
       setStep(1);
@@ -115,7 +132,6 @@ export default function RegisterScreen() {
       return;
     }
 
-    // If caregiver registered a child, save it after profile is created
     if (role === 'caregiver' && formData.childName && data.user) {
       localStorage.setItem('kikicare_pending_child', JSON.stringify({
         name: formData.childName,
@@ -131,6 +147,11 @@ export default function RegisterScreen() {
 
   const pwdValid = passwordRules.map(r => ({ ...r, pass: r.test(formData.password) }));
 
+  const handleStep1Next = async () => {
+    const valid = await validateStep1();
+    if (valid) setStep(2);
+  };
+
   const handleStep2Next = () => {
     if (role === 'kinesiologist') {
       if (validateStep2Kine()) setStep(3);
@@ -140,7 +161,7 @@ export default function RegisterScreen() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-background max-w-[500px] mx-auto">
+    <div className="flex flex-col min-h-screen bg-background max-w-[420px] mx-auto">
       <div className="px-4 pt-4 flex items-center gap-3">
         <button onClick={() => step > 1 ? setStep(step - 1) : navigate(-1)}
           className="w-9 h-9 rounded-full bg-muted flex items-center justify-center" aria-label="Volver">
@@ -213,7 +234,9 @@ export default function RegisterScreen() {
                   <input className={`input-kiki ${errors.confirmPassword ? 'border-rust' : ''}`} placeholder="Confirmar contraseña" type="password" value={formData.confirmPassword} onChange={e => handleChange('confirmPassword', e.target.value)} maxLength={20} />
                   {errors.confirmPassword && <p className="text-xs text-rust mt-1">{errors.confirmPassword}</p>}
                 </div>
-                <button onClick={() => { if (validateStep1()) setStep(2); }} className="btn-primary w-full">Siguiente</button>
+                <button onClick={handleStep1Next} disabled={checkingEmail} className="btn-primary w-full disabled:opacity-60">
+                  {checkingEmail ? 'Verificando email...' : 'Siguiente'}
+                </button>
               </div>
             )}
 
@@ -239,7 +262,7 @@ export default function RegisterScreen() {
               <div className="space-y-4">
                 <h2 className="text-xl font-bold">Datos del niño</h2>
                 <input className="input-kiki" placeholder="Nombre del niño" value={formData.childName} onChange={e => handleChange('childName', e.target.value)} />
-                <input className="input-kiki" placeholder="Edad" type="number" min="0" max="18" value={formData.childAge} onChange={e => {
+                <input className="input-kiki" placeholder="Edad (0-18)" type="number" min="0" max="18" value={formData.childAge} onChange={e => {
                   const val = e.target.value;
                   if (val === '' || (parseInt(val) >= 0 && parseInt(val) <= 18)) handleChange('childAge', val);
                 }} />
@@ -262,23 +285,23 @@ export default function RegisterScreen() {
             {step === 3 && (
               <div className="space-y-4">
                 <h2 className="text-xl font-bold">Confirmación</h2>
-                <div className="card-kiki p-4 space-y-2">
+                <KikiCard className="!p-4 space-y-2">
                   <p className="text-sm"><span className="font-medium">Nombre:</span> {formData.name || 'No completado'}</p>
                   <p className="text-sm"><span className="font-medium">Email:</span> {formData.email || 'No completado'}</p>
                   <p className="text-sm"><span className="font-medium">Rol:</span> {role === 'kinesiologist' ? 'Kinesiólogo' : 'Cuidadora'}</p>
                   {role === 'kinesiologist' && (
                     <>
                       <p className="text-sm"><span className="font-medium">Especialidad:</span> {formData.specialty}</p>
-                      <p className="text-sm"><span className="font-medium">Matrícula:</span> {formData.matricula}</p>
+                      {formData.matricula && <p className="text-sm"><span className="font-medium">Matrícula:</span> {formData.matricula}</p>}
                     </>
                   )}
-                  {role === 'caregiver' && (
+                  {role === 'caregiver' && formData.childName && (
                     <>
                       <p className="text-sm"><span className="font-medium">Niño:</span> {formData.childName}</p>
-                      <p className="text-sm"><span className="font-medium">Diagnóstico:</span> {formData.childDiagnosis}</p>
+                      {formData.childDiagnosis && <p className="text-sm"><span className="font-medium">Diagnóstico:</span> {formData.childDiagnosis}</p>}
                     </>
                   )}
-                </div>
+                </KikiCard>
 
                 <div className="space-y-3">
                   <label className="flex items-start gap-3 cursor-pointer">
@@ -321,7 +344,7 @@ export default function RegisterScreen() {
           <motion.div
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="bg-card rounded-t-2xl w-full max-w-[390px] max-h-[85vh] flex flex-col"
+            className="bg-card rounded-t-2xl w-full max-w-[420px] max-h-[85vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 pt-4 pb-2 border-b border-border">
@@ -343,7 +366,7 @@ export default function RegisterScreen() {
           <motion.div
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="bg-card rounded-t-2xl w-full max-w-[390px] max-h-[85vh] flex flex-col"
+            className="bg-card rounded-t-2xl w-full max-w-[420px] max-h-[85vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 pt-4 pb-2 border-b border-border">
@@ -364,54 +387,32 @@ export default function RegisterScreen() {
 
 function TermsContent() {
   return (
-    <div className="space-y-4 text-sm text-foreground leading-relaxed">
-      <p className="text-xs text-muted-foreground">Última actualización: 15 de marzo de 2025</p>
-      <h2 className="font-semibold text-base">1. Aceptación de los Términos</h2>
-      <p>Al acceder y utilizar la aplicación KikiCare ("la App"), aceptás estos Términos y Condiciones en su totalidad.</p>
-      <h2 className="font-semibold text-base">2. Descripción del Servicio</h2>
-      <p>KikiCare es una plataforma tecnológica que facilita la comunicación entre kinesiólogos y cuidadores de niños con parálisis cerebral infantil (PCI).</p>
-      <h2 className="font-semibold text-base">3. Registro y Cuentas</h2>
-      <p>Para utilizar la App debés registrarte proporcionando información veraz y actualizada.</p>
-      <h2 className="font-semibold text-base">4. Uso Aceptable</h2>
-      <p>Te comprometés a utilizar la App exclusivamente para fines relacionados con la rehabilitación y seguimiento terapéutico.</p>
-      <h2 className="font-semibold text-base">5. Datos de Salud</h2>
-      <p>La información de salud ingresada en la App es considerada dato sensible según la Ley 25.326.</p>
-      <h2 className="font-semibold text-base">6. Propiedad Intelectual</h2>
-      <p>Los ejercicios creados por los kinesiólogos dentro de la App son propiedad intelectual de sus autores.</p>
-      <h2 className="font-semibold text-base">7. Limitación de Responsabilidad</h2>
-      <p>KikiCare no es responsable por diagnósticos médicos ni decisiones terapéuticas tomadas en base a la información de la App.</p>
-      <h2 className="font-semibold text-base">8. Motor de Adherencia Adaptativa (MAA)</h2>
-      <p>El MAA es una herramienta de apoyo que genera alertas basadas en patrones de uso. Las alertas son orientativas.</p>
-      <h2 className="font-semibold text-base">9. Cancelación</h2>
-      <p>Podés cancelar tu cuenta en cualquier momento desde la configuración de la App.</p>
-      <h2 className="font-semibold text-base">10. Jurisdicción</h2>
-      <p>Estos términos se rigen por las leyes de la República Argentina.</p>
-      <p className="text-xs text-muted-foreground pt-2">Para consultas: legal@kikicare.app</p>
+    <div className="prose prose-sm max-w-none text-foreground">
+      <h4>1. Aceptación de los Términos</h4>
+      <p>Al utilizar KikiCare, aceptás estos términos y condiciones en su totalidad.</p>
+      <h4>2. Descripción del Servicio</h4>
+      <p>KikiCare es una plataforma de apoyo a la rehabilitación pediátrica que conecta kinesiólogos con cuidadores/as.</p>
+      <h4>3. Responsabilidades</h4>
+      <p>KikiCare no reemplaza la supervisión médica profesional. Siempre consultá con tu profesional de salud.</p>
+      <h4>4. Privacidad</h4>
+      <p>Tus datos se manejan conforme a nuestra Política de Privacidad.</p>
+      <h4>5. Modificaciones</h4>
+      <p>Nos reservamos el derecho de modificar estos términos en cualquier momento.</p>
     </div>
   );
 }
 
 function PrivacyContent() {
   return (
-    <div className="space-y-4 text-sm text-foreground leading-relaxed">
-      <p className="text-xs text-muted-foreground">Última actualización: 15 de marzo de 2025</p>
-      <h2 className="font-semibold text-base">1. Información que Recopilamos</h2>
-      <p>Datos personales: Nombre, email, matrícula profesional, datos del niño.</p>
-      <h2 className="font-semibold text-base">2. Cómo Utilizamos la Información</h2>
-      <p>Utilizamos los datos para facilitar el seguimiento terapéutico y generar alertas de adherencia.</p>
-      <h2 className="font-semibold text-base">3. Base Legal</h2>
-      <p>El tratamiento de datos se realiza conforme a la Ley 25.326 de Protección de Datos Personales.</p>
-      <h2 className="font-semibold text-base">4. Almacenamiento y Seguridad</h2>
-      <p>Los datos se almacenan en servidores seguros con encriptación AES-256 en reposo y TLS 1.3 en tránsito.</p>
-      <h2 className="font-semibold text-base">5. Compartir Información</h2>
-      <p>No vendemos ni compartimos datos personales con terceros.</p>
-      <h2 className="font-semibold text-base">6. Derechos del Usuario</h2>
-      <p>Tenés derecho a acceder, rectificar y suprimir tus datos personales. Escribí a privacidad@kikicare.app.</p>
-      <h2 className="font-semibold text-base">7. Datos de Menores</h2>
-      <p>Los datos de los niños son gestionados exclusivamente por sus cuidadores legales.</p>
-      <h2 className="font-semibold text-base">8. Retención de Datos</h2>
-      <p>Los datos se conservan mientras la cuenta esté activa y durante 12 meses posteriores a la última actividad.</p>
-      <p className="text-xs text-muted-foreground pt-2">Contacto: privacidad@kikicare.app</p>
+    <div className="prose prose-sm max-w-none text-foreground">
+      <h4>1. Datos Recopilados</h4>
+      <p>Recopilamos datos personales como nombre, email y datos de salud del niño/a para brindar el servicio.</p>
+      <h4>2. Uso de los Datos</h4>
+      <p>Los datos se utilizan exclusivamente para el funcionamiento de la plataforma y la comunicación entre profesionales y cuidadores.</p>
+      <h4>3. Seguridad</h4>
+      <p>Implementamos medidas de seguridad para proteger tu información personal y de salud.</p>
+      <h4>4. Derechos</h4>
+      <p>Podés acceder, modificar o eliminar tus datos en cualquier momento desde tu perfil.</p>
     </div>
   );
 }

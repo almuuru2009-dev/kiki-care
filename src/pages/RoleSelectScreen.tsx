@@ -1,20 +1,17 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ClipboardList, Heart } from 'lucide-react';
-import { useAppStore } from '@/stores/useAppStore';
 import kikiMascot from '@/assets/kiki-mascot.png';
 
 export default function RoleSelectScreen() {
   const navigate = useNavigate();
-  const { setSelectedRole } = useAppStore();
 
-  const handleSelect = (role: 'kinesiologist' | 'caregiver') => {
-    setSelectedRole(role);
+  const handleSelect = (_role: 'kinesiologist' | 'caregiver') => {
     navigate('/login');
   };
 
   return (
-    <div className="mobile-frame flex flex-col min-h-screen bg-background px-6 py-8">
+    <div className="max-w-[420px] mx-auto w-full flex flex-col min-h-screen bg-background px-6 py-8">
       <motion.div
         className="flex flex-col items-center mt-8"
         initial={{ y: -20, opacity: 0 }}

@@ -20,10 +20,9 @@ export default function SplashScreen() {
 
     setShow(false);
     const fadeTimer = setTimeout(() => {
-      if (loading) return; // still loading auth
+      if (loading) return;
 
       if (user && profile) {
-        // Already logged in → redirect by role
         if (profile.role === 'kinesiologist') {
           navigate('/kine/home', { replace: true });
         } else {
@@ -37,7 +36,7 @@ export default function SplashScreen() {
   }, [minTimePassed, loading, user, profile, navigate]);
 
   return (
-    <div className="mobile-frame">
+    <div className="max-w-[420px] mx-auto w-full">
       <AnimatePresence>
         {show && (
           <motion.div
