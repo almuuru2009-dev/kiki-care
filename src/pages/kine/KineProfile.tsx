@@ -17,6 +17,7 @@ export default function KineProfile() {
   const [editName, setEditName] = useState(profile?.name || '');
   const [editInst, setEditInst] = useState(profile?.institution || '');
   const [editMatricula, setEditMatricula] = useState(profile?.matricula || '');
+  const [editSpecialty, setEditSpecialty] = useState(profile?.specialty || '');
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
@@ -32,6 +33,7 @@ export default function KineProfile() {
     setEditName(profile?.name || '');
     setEditInst(profile?.institution || '');
     setEditMatricula(profile?.matricula || '');
+    setEditSpecialty(profile?.specialty || '');
   }, [profile]);
 
   const loadStats = async () => {
@@ -52,6 +54,7 @@ export default function KineProfile() {
       name: editName,
       institution: editInst,
       matricula: editMatricula,
+      specialty: editSpecialty,
     });
     if (error) {
       toast.error('Error al guardar');
@@ -102,7 +105,7 @@ export default function KineProfile() {
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mi cuenta</h3>
               <button onClick={() => {
-                if (editingAccount) { setEditName(profile?.name || ''); setEditInst(profile?.institution || ''); setEditMatricula(profile?.matricula || ''); }
+                if (editingAccount) { setEditName(profile?.name || ''); setEditInst(profile?.institution || ''); setEditMatricula(profile?.matricula || ''); setEditSpecialty(profile?.specialty || ''); }
                 setEditingAccount(!editingAccount);
               }} className="text-xs text-mint-500 font-medium flex items-center gap-1">
                 {editingAccount ? <><X size={12} /> Cancelar</> : <><Edit2 size={12} /> Editar</>}
@@ -111,6 +114,15 @@ export default function KineProfile() {
             {editingAccount ? (
               <div className="space-y-2">
                 <div><label className="text-[10px] text-muted-foreground">Nombre</label><input className="input-kiki text-sm" value={editName} onChange={e => setEditName(e.target.value)} /></div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground">Especialidad</label>
+                  <select className="input-kiki text-sm" value={editSpecialty} onChange={e => setEditSpecialty(e.target.value)}>
+                    <option value="">Seleccionar</option>
+                    <option>Kinesiología Pediátrica</option>
+                    <option>Kinesiología Neurológica</option>
+                    <option>Fisioterapia general</option>
+                  </select>
+                </div>
                 <div><label className="text-[10px] text-muted-foreground">Institución</label><input className="input-kiki text-sm" value={editInst} onChange={e => setEditInst(e.target.value)} /></div>
                 <div><label className="text-[10px] text-muted-foreground">Matrícula</label><input className="input-kiki text-sm" value={editMatricula} onChange={e => setEditMatricula(e.target.value)} /></div>
                 <p className="text-xs text-muted-foreground">Email: {profile?.email}</p>
