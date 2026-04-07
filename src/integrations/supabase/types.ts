@@ -56,6 +56,81 @@ export type Database = {
         }
         Relationships: []
       }
+      community_exercises: {
+        Row: {
+          adherence: number | null
+          age_range: string | null
+          area: string | null
+          author_city: string | null
+          author_name: string
+          category: string | null
+          clinical_name: string
+          created_at: string
+          description: string | null
+          duration: number | null
+          evidence: string | null
+          gmfcs: string | null
+          icon: string | null
+          id: string
+          instructions: string | null
+          rating: number | null
+          reps: string | null
+          reviews: number | null
+          sets: number | null
+          simple_name: string | null
+          validated: boolean | null
+          video_url: string | null
+        }
+        Insert: {
+          adherence?: number | null
+          age_range?: string | null
+          area?: string | null
+          author_city?: string | null
+          author_name: string
+          category?: string | null
+          clinical_name: string
+          created_at?: string
+          description?: string | null
+          duration?: number | null
+          evidence?: string | null
+          gmfcs?: string | null
+          icon?: string | null
+          id?: string
+          instructions?: string | null
+          rating?: number | null
+          reps?: string | null
+          reviews?: number | null
+          sets?: number | null
+          simple_name?: string | null
+          validated?: boolean | null
+          video_url?: string | null
+        }
+        Update: {
+          adherence?: number | null
+          age_range?: string | null
+          area?: string | null
+          author_city?: string | null
+          author_name?: string
+          category?: string | null
+          clinical_name?: string
+          created_at?: string
+          description?: string | null
+          duration?: number | null
+          evidence?: string | null
+          gmfcs?: string | null
+          icon?: string | null
+          id?: string
+          instructions?: string | null
+          rating?: number | null
+          reps?: string | null
+          reviews?: number | null
+          sets?: number | null
+          simple_name?: string | null
+          validated?: boolean | null
+          video_url?: string | null
+        }
+        Relationships: []
+      }
       exercises: {
         Row: {
           created_at: string
@@ -70,6 +145,7 @@ export type Database = {
           target_area: string | null
           thumbnail_color: string | null
           updated_at: string
+          video_url: string | null
         }
         Insert: {
           created_at?: string
@@ -84,6 +160,7 @@ export type Database = {
           target_area?: string | null
           thumbnail_color?: string | null
           updated_at?: string
+          video_url?: string | null
         }
         Update: {
           created_at?: string
@@ -98,6 +175,7 @@ export type Database = {
           target_area?: string | null
           thumbnail_color?: string | null
           updated_at?: string
+          video_url?: string | null
         }
         Relationships: []
       }
@@ -122,6 +200,39 @@ export type Database = {
           text?: string
           type?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      medals: {
+        Row: {
+          description: string | null
+          earned_at: string
+          id: string
+          medal_type: string
+          points_awarded: number
+          title: string
+          user_id: string
+          year: number
+        }
+        Insert: {
+          description?: string | null
+          earned_at?: string
+          id?: string
+          medal_type: string
+          points_awarded?: number
+          title: string
+          user_id: string
+          year: number
+        }
+        Update: {
+          description?: string | null
+          earned_at?: string
+          id?: string
+          medal_type?: string
+          points_awarded?: number
+          title?: string
+          user_id?: string
+          year?: number
         }
         Relationships: []
       }
@@ -204,6 +315,7 @@ export type Database = {
           institution: string | null
           matricula: string | null
           name: string
+          onboarding_completed: boolean | null
           phone: string | null
           role: string
           specialty: string | null
@@ -216,6 +328,7 @@ export type Database = {
           institution?: string | null
           matricula?: string | null
           name?: string
+          onboarding_completed?: boolean | null
           phone?: string | null
           role: string
           specialty?: string | null
@@ -228,12 +341,42 @@ export type Database = {
           institution?: string | null
           matricula?: string | null
           name?: string
+          onboarding_completed?: boolean | null
           phone?: string | null
           role?: string
           specialty?: string | null
           updated_at?: string
         }
         Relationships: []
+      }
+      saved_exercises: {
+        Row: {
+          created_at: string
+          exercise_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          exercise_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          exercise_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_exercises_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sessions: {
         Row: {
@@ -367,6 +510,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_points: {
+        Row: {
+          created_at: string
+          id: string
+          month: number
+          points: number
+          sessions_completed: number
+          sessions_required: number
+          star_earned: boolean
+          user_id: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: number
+          points?: number
+          sessions_completed?: number
+          sessions_required?: number
+          star_earned?: boolean
+          user_id: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: number
+          points?: number
+          sessions_completed?: number
+          sessions_required?: number
+          star_earned?: boolean
+          user_id?: string
+          year?: number
+        }
+        Relationships: []
       }
       user_settings: {
         Row: {
