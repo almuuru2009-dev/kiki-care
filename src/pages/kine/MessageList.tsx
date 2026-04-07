@@ -1,83 +1,20 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { useConversations } from '@/hooks/useConversations';
 import { MessageCircle } from 'lucide-react';
-
-interface ConversationSummary {
-  partnerId: string;
-  partnerName: string;
-  lastMessage: string;
-  lastTime: string;
-  unread: number;
-}
 
 export default function MessageList() {
   const navigate = useNavigate();
   const { user } = useAuthContext();
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (user) loadConversations();
-  }, [user]);
-
-  const loadConversations = async () => {
-    if (!user) return;
-
-    // Get all messages involving this user
-    const { data: messages } = await supabase
-      .from('messages')
-      .select('*')
-      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-      .order('created_at', { ascending: false });
-
-    if (!messages || messages.length === 0) {
-      setLoading(false);
-      return;
-    }
-
-    // Group by partner
-    const partnerMap = new Map<string, { msgs: typeof messages; unread: number }>();
-    for (const msg of messages) {
-      const partnerId = msg.sender_id === user.id ? msg.receiver_id : msg.sender_id;
-      if (!partnerMap.has(partnerId)) {
-        partnerMap.set(partnerId, { msgs: [], unread: 0 });
-      }
-      const entry = partnerMap.get(partnerId)!;
-      entry.msgs.push(msg);
-      if (!msg.read && msg.receiver_id === user.id) entry.unread++;
-    }
-
-    // Get partner names
-    const partnerIds = Array.from(partnerMap.keys());
-    const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', partnerIds);
-
-    const convs: ConversationSummary[] = partnerIds.map(pid => {
-      const entry = partnerMap.get(pid)!;
-      const lastMsg = entry.msgs[0];
-      const profile = profiles?.find(p => p.id === pid);
-      return {
-        partnerId: pid,
-        partnerName: profile?.name || 'Usuario',
-        lastMessage: lastMsg.content,
-        lastTime: new Date(lastMsg.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
-        unread: entry.unread,
-      };
-    });
-
-    setConversations(convs);
-    setLoading(false);
-  };
+  const { conversations, loading } = useConversations(user?.id);
 
   return (
     <AppShell>
       <ScreenHeader title="Mensajes" />
-
       <div className="px-4 pb-6 space-y-2">
         {loading ? (
           <div className="flex justify-center py-12">
@@ -89,18 +26,11 @@ export default function MessageList() {
               <MessageCircle size={28} className="text-muted-foreground" />
             </div>
             <h3 className="font-semibold text-foreground">No hay mensajes aún</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              Los mensajes con tus contactos aparecerán acá
-            </p>
+            <p className="text-sm text-muted-foreground mt-1">Cuando te comuniques con un cuidador/a, los mensajes aparecerán acá</p>
           </div>
         ) : (
           conversations.map((conv, i) => (
-            <motion.div
-              key={conv.partnerId}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-            >
+            <motion.div key={conv.partnerId} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
               <KikiCard onClick={() => navigate(`/kine/messages/${conv.partnerId}`)} className="flex items-center gap-3">
                 <AvatarCircle name={conv.partnerName} size="md" />
                 <div className="flex-1 min-w-0">
@@ -123,3 +53,4 @@ export default function MessageList() {
     </AppShell>
   );
 }
+
