@@ -1,75 +1,16 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { MessageCircle } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { MessageCircle } from 'lucide-react';
-import { motion } from 'framer-motion';
-
-interface ConversationSummary {
-  partnerId: string;
-  partnerName: string;
-  lastMessage: string;
-  lastTime: string;
-  unread: number;
-}
+import { useConversations } from '@/hooks/useConversations';
 
 export default function CuidadoraMessages() {
   const navigate = useNavigate();
   const { user } = useAuthContext();
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (user) loadConversations();
-  }, [user]);
-
-  const loadConversations = async () => {
-    if (!user) return;
-
-    const { data: messages } = await supabase
-      .from('messages')
-      .select('*')
-      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-      .order('created_at', { ascending: false });
-
-    if (!messages || messages.length === 0) {
-      setLoading(false);
-      return;
-    }
-
-    const partnerMap = new Map<string, { msgs: typeof messages; unread: number }>();
-    for (const msg of messages) {
-      const partnerId = msg.sender_id === user.id ? msg.receiver_id : msg.sender_id;
-      if (!partnerMap.has(partnerId)) {
-        partnerMap.set(partnerId, { msgs: [], unread: 0 });
-      }
-      const entry = partnerMap.get(partnerId)!;
-      entry.msgs.push(msg);
-      if (!msg.read && msg.receiver_id === user.id) entry.unread++;
-    }
-
-    const partnerIds = Array.from(partnerMap.keys());
-    const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', partnerIds);
-
-    const convs: ConversationSummary[] = partnerIds.map(pid => {
-      const entry = partnerMap.get(pid)!;
-      const lastMsg = entry.msgs[0];
-      const profile = profiles?.find(p => p.id === pid);
-      return {
-        partnerId: pid,
-        partnerName: profile?.name || 'Kinesiólogo/a',
-        lastMessage: lastMsg.content,
-        lastTime: new Date(lastMsg.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
-        unread: entry.unread,
-      };
-    });
-
-    setConversations(convs);
-    setLoading(false);
-  };
+  const { conversations, loading } = useConversations(user?.id);
 
   return (
     <AppShell>
@@ -85,9 +26,7 @@ export default function CuidadoraMessages() {
               <MessageCircle size={28} className="text-muted-foreground" />
             </div>
             <h3 className="font-semibold text-foreground">No hay mensajes aún</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              Cuando tu kinesiólogo/a te escriba, verás los mensajes acá
-            </p>
+            <p className="text-sm text-muted-foreground mt-1">Cuando tu kinesiólogo/a te escriba, verás los mensajes acá</p>
           </div>
         ) : (
           conversations.map((conv, i) => (
