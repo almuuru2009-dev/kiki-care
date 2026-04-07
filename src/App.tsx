@@ -36,6 +36,7 @@ import CuidadoraMessages from "./pages/cuidadora/CuidadoraMessages";
 import ChildProfile from "./pages/cuidadora/ChildProfile";
 import MedalsScreen from "./pages/cuidadora/MedalsScreen";
 
+import OnboardingScreen from "./pages/OnboardingScreen";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -60,6 +61,7 @@ const App = () => (
               <Route path="/terms" element={<TermsScreen />} />
               <Route path="/privacy" element={<PrivacyScreen />} />
               <Route path="/pending-invitations" element={<ProtectedRoute><PendingInvitationsScreen /></ProtectedRoute>} />
+              <Route path="/onboarding" element={<ProtectedRoute><OnboardingScreen /></ProtectedRoute>} />
 
               {/* Kine routes - protected, kinesiologist only */}
               <Route path="/kine/home" element={<ProtectedRoute allowedRole="kinesiologist"><KineHome /></ProtectedRoute>} />
