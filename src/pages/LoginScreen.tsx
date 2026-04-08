@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -9,6 +9,7 @@ import kikiMascot from '@/assets/kiki-mascot.png';
 
 export default function LoginScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, profile } = useAuthContext();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,6 +17,9 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [roleMessage, setRoleMessage] = useState('');
+
+  // Get selected role from URL state (passed from RoleSelectScreen)
+  const selectedRole = (location.state as any)?.role as 'kinesiologist' | 'caregiver' | undefined;
 
   useEffect(() => {
     if (user && profile) {
@@ -30,7 +34,6 @@ export default function LoginScreen() {
       setRoleMessage('Iniciando como cuidador...');
     }
 
-    // Check onboarding
     if (!prof.onboarding_completed) {
       setTimeout(() => navigate('/onboarding', { replace: true }), 600);
       return;
@@ -39,7 +42,6 @@ export default function LoginScreen() {
     if (prof.role === 'kinesiologist') {
       setTimeout(() => navigate('/kine/home', { replace: true }), 600);
     } else {
-      // Check for pending invitations
       if (user?.email) {
         const { data } = await supabase
           .from('therapist_caregiver_links')
@@ -54,7 +56,6 @@ export default function LoginScreen() {
         }
       }
 
-      // Check for pending child data from registration
       const pendingChild = localStorage.getItem('kikicare_pending_child');
       if (pendingChild && user) {
         try {
@@ -96,10 +97,28 @@ export default function LoginScreen() {
     }
 
     if (data.user) {
+      // Check role matches selected role
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileData && selectedRole && profileData.role !== selectedRole) {
+        await supabase.auth.signOut();
+        const roleLabel = selectedRole === 'kinesiologist' ? 'kinesiólogo' : 'cuidador';
+        const actualRoleLabel = profileData.role === 'kinesiologist' ? 'kinesiólogo' : 'cuidador';
+        setError(`Tu cuenta fue registrada como ${actualRoleLabel}. No podés iniciar sesión como ${roleLabel}.`);
+        setLoading(false);
+        return;
+      }
+
       toast.success('¡Bienvenido!');
     }
     setLoading(false);
   };
+
+  const roleLabel = selectedRole === 'kinesiologist' ? 'Kinesiólogo' : selectedRole === 'caregiver' ? 'Cuidador/a' : null;
 
   if (roleMessage) {
     return (
@@ -126,6 +145,11 @@ export default function LoginScreen() {
           <img src={kikiMascot} alt="Kiki" className="w-10 h-10 object-contain" />
           <div>
             <h1 className="text-xl font-bold text-foreground">Iniciar sesión</h1>
+            {roleLabel && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-mint-100 text-mint-700">
+                {roleLabel}
+              </span>
+            )}
           </div>
         </div>
 
