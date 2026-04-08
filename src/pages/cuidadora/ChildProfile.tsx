@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Send, LogOut, Bell, BellOff, Mail, ChevronRight, Edit2, HelpCircle, Shield, Globe, MessageSquarePlus, UserMinus, Save, X } from 'lucide-react';
+import { Send, LogOut, Mail, ChevronRight, Edit2, HelpCircle, Shield, Globe, MessageSquarePlus, UserMinus, Save, X, Trash2, AlertTriangle, Settings } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
@@ -47,6 +47,10 @@ export default function ChildProfile() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const isDemo = profile?.email === 'caregiver@kikicare.com';
 
   useEffect(() => {
     if (user) {
@@ -154,8 +158,29 @@ export default function ChildProfile() {
   const handleSubmitFeedback = async () => {
     if (!feedbackText.trim() || !user) return;
     await supabase.from('feedback').insert({ user_id: user.id, text: feedbackText, type: 'comment' });
+    try {
+      await supabase.functions.invoke('send-feedback', {
+        body: { text: feedbackText, type: 'comment', userEmail: profile?.email || user.email, userName: profile?.name }
+      });
+    } catch {}
     setFeedbackSent(true);
+    toast.success('Gracias por tu comentario. Lo enviaremos a soporte.kikicare@gmail.com');
     setTimeout(() => { setShowFeedback(false); setFeedbackSent(false); setFeedbackText(''); }, 2000);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    setDeleteLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-account');
+      if (error) throw error;
+      toast.success('Cuenta eliminada permanentemente');
+      await signOut();
+      navigate('/', { replace: true });
+    } catch (e: any) {
+      toast.error('Error al eliminar cuenta: ' + (e.message || 'Intenta de nuevo'));
+      setDeleteLoading(false);
+    }
   };
 
   const stagger = {
@@ -193,6 +218,14 @@ export default function ChildProfile() {
           )}
         </motion.div>
 
+        {/* Review info banner */}
+        <motion.div variants={stagger.item}>
+          <div className="bg-blue-50 rounded-xl p-3 flex items-center gap-2">
+            <span className="text-sm">ℹ️</span>
+            <p className="text-xs text-blue-700">Podés revisar y editar la información de tu hijo/a y tu cuenta en esta pantalla.</p>
+          </div>
+        </motion.div>
+
         {/* Child info (editable) */}
         {child && (
           <motion.div variants={stagger.item}>
@@ -201,10 +234,7 @@ export default function ChildProfile() {
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Información del niño</h3>
                 <button onClick={() => {
                   if (editingChild) {
-                    setChildName(child.name);
-                    setChildAge(child.age?.toString() || '');
-                    setChildDiagnosis(child.diagnosis || '');
-                    setChildGmfcs(child.gmfcs?.toString() || '');
+                    setChildName(child.name); setChildAge(child.age?.toString() || ''); setChildDiagnosis(child.diagnosis || ''); setChildGmfcs(child.gmfcs?.toString() || '');
                   }
                   setEditingChild(!editingChild);
                 }} className="text-xs text-mint-500 font-medium flex items-center gap-1">
@@ -213,71 +243,39 @@ export default function ChildProfile() {
               </div>
               {editingChild ? (
                 <div className="space-y-2.5">
-                  <div>
-                    <label className="text-[10px] text-muted-foreground font-medium">Nombre</label>
-                    <input className="input-kiki text-sm" value={childName} onChange={e => setChildName(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-muted-foreground font-medium">Edad (0-18)</label>
-                    <input className="input-kiki text-sm" type="number" min="0" max="18" value={childAge} onChange={e => {
-                      const v = e.target.value;
-                      if (v === '' || (parseInt(v) >= 0 && parseInt(v) <= 18)) setChildAge(v);
-                    }} />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-muted-foreground font-medium">Diagnóstico</label>
+                  <div><label className="text-[10px] text-muted-foreground font-medium">Nombre</label><input className="input-kiki text-sm" value={childName} onChange={e => setChildName(e.target.value)} /></div>
+                  <div><label className="text-[10px] text-muted-foreground font-medium">Edad (0-18)</label><input className="input-kiki text-sm" type="number" min="0" max="18" value={childAge} onChange={e => { const v = e.target.value; if (v === '' || (parseInt(v) >= 0 && parseInt(v) <= 18)) setChildAge(v); }} /></div>
+                  <div><label className="text-[10px] text-muted-foreground font-medium">Diagnóstico</label>
                     <select className="input-kiki text-sm" value={childDiagnosis} onChange={e => setChildDiagnosis(e.target.value)}>
-                      <option value="">Seleccionar</option>
-                      <option>PCI espástica bilateral</option>
-                      <option>PCI espástica unilateral</option>
-                      <option>PCI discinética</option>
-                      <option>PCI atáxica</option>
-                      <option>PCI mixta</option>
+                      <option value="">Seleccionar</option><option>PCI espástica bilateral</option><option>PCI espástica unilateral</option><option>PCI discinética</option><option>PCI atáxica</option><option>PCI mixta</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="text-[10px] text-muted-foreground font-medium">Nivel GMFCS</label>
-                    <div className="flex gap-2 mt-1">
-                      {[1, 2, 3, 4, 5].map(level => (
-                        <button key={level} onClick={() => setChildGmfcs(level.toString())}
-                          className={`w-9 h-9 rounded-full text-xs font-bold transition-colors ${childGmfcs === level.toString() ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}>
-                          {level}
-                        </button>
-                      ))}
-                    </div>
+                  <div><label className="text-[10px] text-muted-foreground font-medium">Nivel GMFCS</label>
+                    <div className="flex gap-2 mt-1">{[1, 2, 3, 4, 5].map(level => (
+                      <button key={level} onClick={() => setChildGmfcs(level.toString())} className={`w-9 h-9 rounded-full text-xs font-bold transition-colors ${childGmfcs === level.toString() ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}>{level}</button>
+                    ))}</div>
                   </div>
-                  <button onClick={handleSaveChild} className="btn-primary w-full text-sm flex items-center justify-center gap-2">
-                    <Save size={14} /> Guardar cambios
-                  </button>
+                  <button onClick={handleSaveChild} className="btn-primary w-full text-sm flex items-center justify-center gap-2"><Save size={14} /> Guardar cambios</button>
                 </div>
               ) : (
-                <>
-                  {[
-                    { label: 'Nombre', value: child.name },
-                    { label: 'Edad', value: child.age ? `${child.age} años` : '-' },
-                    { label: 'Diagnóstico', value: child.diagnosis || '-' },
-                    { label: 'GMFCS', value: child.gmfcs ? `Nivel ${child.gmfcs}` : '-' },
-                  ].map(item => (
-                    <div key={item.label} className="flex justify-between py-2 border-b border-border last:border-0">
-                      <span className="text-sm text-muted-foreground">{item.label}</span>
-                      <span className="text-sm font-medium">{item.value}</span>
-                    </div>
-                  ))}
-                </>
+                <>{[
+                  { label: 'Nombre', value: child.name },
+                  { label: 'Edad', value: child.age ? `${child.age} años` : '-' },
+                  { label: 'Diagnóstico', value: child.diagnosis || '-' },
+                  { label: 'GMFCS', value: child.gmfcs ? `Nivel ${child.gmfcs}` : '-' },
+                ].map(item => (
+                  <div key={item.label} className="flex justify-between py-2 border-b border-border last:border-0">
+                    <span className="text-sm text-muted-foreground">{item.label}</span>
+                    <span className="text-sm font-medium">{item.value}</span>
+                  </div>
+                ))}</>
               )}
             </KikiCard>
           </motion.div>
         )}
 
-        {/* No child registered */}
         {!child && (
-          <motion.div variants={stagger.item}>
-            <KikiCard>
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No tenés un niño registrado aún. Tu kinesiólogo te enviará una invitación.
-              </p>
-            </KikiCard>
-          </motion.div>
+          <motion.div variants={stagger.item}><KikiCard><p className="text-sm text-muted-foreground text-center py-4">No tenés un niño registrado aún. Tu kinesiólogo te enviará una invitación.</p></KikiCard></motion.div>
         )}
 
         {/* My therapist */}
@@ -295,19 +293,12 @@ export default function ChildProfile() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
-                  <button onClick={() => navigate(`/cuidadora/messages/${therapistLink.therapist_id}`)} className="btn-secondary flex-1 text-sm">
-                    <Send size={14} className="inline mr-1" /> Mensaje
-                  </button>
-                  <button onClick={() => setShowUnlinkConfirm(true)} className="flex-1 text-sm py-2 rounded-xl border border-red-200 text-rust font-medium flex items-center justify-center gap-1">
-                    <UserMinus size={14} /> Desvincular
-                  </button>
+                  <button onClick={() => navigate(`/cuidadora/messages/${therapistLink.therapist_id}`)} className="btn-secondary flex-1 text-sm"><Send size={14} className="inline mr-1" /> Mensaje</button>
+                  <button onClick={() => setShowUnlinkConfirm(true)} className="flex-1 text-sm py-2 rounded-xl border border-red-200 text-rust font-medium flex items-center justify-center gap-1"><UserMinus size={14} /> Desvincular</button>
                 </div>
               </>
             ) : (
-              <div className="text-center py-4">
-                <p className="text-sm text-muted-foreground">No tenés un kinesiólogo vinculado</p>
-                <p className="text-xs text-muted-foreground mt-1">Pedile a tu kinesiólogo que te envíe una invitación por email</p>
-              </div>
+              <div className="text-center py-4"><p className="text-sm text-muted-foreground">No tenés un kinesiólogo vinculado</p><p className="text-xs text-muted-foreground mt-1">Pedile a tu kinesiólogo que te envíe una invitación por email</p></div>
             )}
           </KikiCard>
         </motion.div>
@@ -317,8 +308,7 @@ export default function ChildProfile() {
           <KikiCard>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mi cuenta</h3>
-              <button onClick={() => { setEditingAccount(!editingAccount); setEditName(profile?.name || ''); }}
-                className="text-xs text-mint-500 font-medium flex items-center gap-1">
+              <button onClick={() => { setEditingAccount(!editingAccount); setEditName(profile?.name || ''); }} className="text-xs text-mint-500 font-medium flex items-center gap-1">
                 {editingAccount ? <><X size={12} /> Cancelar</> : <><Edit2 size={12} /> Editar</>}
               </button>
             </div>
@@ -329,17 +319,15 @@ export default function ChildProfile() {
                 <button onClick={handleSaveAccount} className="btn-primary w-full text-sm">Guardar</button>
               </div>
             ) : (
-              <>
-                {[
-                  { label: 'Nombre', value: profile?.name || '-' },
-                  { label: 'Email', value: profile?.email || user?.email || '-' },
-                ].map(item => (
-                  <div key={item.label} className="flex justify-between py-2 border-b border-border last:border-0">
-                    <span className="text-sm text-muted-foreground">{item.label}</span>
-                    <span className="text-sm font-medium">{item.value}</span>
-                  </div>
-                ))}
-              </>
+              <>{[
+                { label: 'Nombre', value: profile?.name || '-' },
+                { label: 'Email', value: profile?.email || user?.email || '-' },
+              ].map(item => (
+                <div key={item.label} className="flex justify-between py-2 border-b border-border last:border-0">
+                  <span className="text-sm text-muted-foreground">{item.label}</span>
+                  <span className="text-sm font-medium">{item.value}</span>
+                </div>
+              ))}</>
             )}
           </KikiCard>
         </motion.div>
@@ -347,10 +335,7 @@ export default function ChildProfile() {
         {/* Change password */}
         <motion.div variants={stagger.item}>
           <KikiCard onClick={() => navigate('/change-password')} className="cursor-pointer">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Cambiar contraseña</span>
-              <ChevronRight size={16} className="text-muted-foreground" />
-            </div>
+            <div className="flex items-center justify-between"><span className="text-sm font-medium">Cambiar contraseña</span><ChevronRight size={16} className="text-muted-foreground" /></div>
           </KikiCard>
         </motion.div>
 
@@ -370,12 +355,30 @@ export default function ChildProfile() {
           </KikiCard>
         </motion.div>
 
-        {/* Logout */}
-        <motion.div variants={stagger.item}>
-          <button onClick={handleLogout} className="w-full text-center py-3 text-sm font-medium text-rust">
-            <LogOut size={16} className="inline mr-2" /> Cerrar sesión
-          </button>
-        </motion.div>
+        {/* Demo reset */}
+        {isDemo && (
+          <motion.div variants={stagger.item}>
+            <KikiCard className="bg-amber-50 border border-amber-200">
+              <div className="flex items-center gap-3">
+                <Settings size={18} className="text-amber-600" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-800">Modo Demo</p>
+                  <p className="text-[10px] text-amber-600">Restaurá los datos originales si hiciste cambios para pruebas</p>
+                </div>
+              </div>
+              <button onClick={async () => {
+                try {
+                  const { error } = await supabase.functions.invoke('seed-demo-data');
+                  if (error) throw error;
+                  toast.success('Demo restaurado correctamente');
+                  window.location.reload();
+                } catch { toast.error('Error al resetear'); }
+              }} className="w-full mt-3 py-2 rounded-xl text-sm font-medium bg-amber-100 text-amber-800 active:bg-amber-200">
+                Resetear Demo
+              </button>
+            </KikiCard>
+          </motion.div>
+        )}
 
         {/* Feedback */}
         <motion.div variants={stagger.item}>
@@ -383,17 +386,28 @@ export default function ChildProfile() {
             <MessageSquarePlus size={14} className="inline mr-1" /> Enviar comentarios
           </button>
         </motion.div>
+
+        {/* Logout */}
+        <motion.div variants={stagger.item}>
+          <button onClick={handleLogout} className="w-full text-center py-3 text-sm font-medium text-rust">
+            <LogOut size={16} className="inline mr-2" /> Cerrar sesión
+          </button>
+        </motion.div>
+
+        {/* Delete account */}
+        <motion.div variants={stagger.item}>
+          <button onClick={() => setShowDeleteConfirm(true)} className="w-full text-center py-2 text-sm text-muted-foreground/60">
+            <Trash2 size={12} className="inline mr-1" /> Eliminar cuenta
+          </button>
+        </motion.div>
       </motion.div>
 
       {/* Unlink confirmation */}
       {showUnlinkConfirm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6" onClick={() => setShowUnlinkConfirm(false)}>
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-            className="bg-card rounded-2xl p-6 w-full max-w-[340px] shadow-kiki-lg" onClick={e => e.stopPropagation()}>
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-card rounded-2xl p-6 w-full max-w-[340px] shadow-kiki-lg" onClick={e => e.stopPropagation()}>
             <h3 className="font-bold text-base mb-2">¿Desvincular kinesiólogo?</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Se archivará el vínculo con {therapistLink?.therapist_name}. Podés solicitar una nueva vinculación después.
-            </p>
+            <p className="text-sm text-muted-foreground mb-4">Se archivará el vínculo con {therapistLink?.therapist_name}. Podés solicitar una nueva vinculación después.</p>
             <div className="flex gap-2">
               <button onClick={handleUnlink} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white bg-rust">Sí, desvincular</button>
               <button onClick={() => setShowUnlinkConfirm(false)} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground">Cancelar</button>
@@ -410,12 +424,13 @@ export default function ChildProfile() {
               <div className="text-center py-4">
                 <p className="text-2xl mb-2">🙏</p>
                 <h3 className="font-bold text-lg">Gracias por tu comentario</h3>
+                <p className="text-xs text-muted-foreground mt-1">Se enviará a soporte.kikicare@gmail.com</p>
               </div>
             ) : (
               <>
-                <h3 className="text-lg font-bold mb-3">Enviar comentarios</h3>
-                <textarea className="input-kiki text-sm min-h-[100px] resize-none" placeholder="Escribí tu comentario…"
-                  value={feedbackText} onChange={e => setFeedbackText(e.target.value)} />
+                <h3 className="text-lg font-bold mb-1">Enviar comentarios</h3>
+                <p className="text-xs text-muted-foreground mb-3">Tu mensaje será enviado a soporte.kikicare@gmail.com</p>
+                <textarea className="input-kiki text-sm min-h-[100px] resize-none" placeholder="Escribí tu comentario…" value={feedbackText} onChange={e => setFeedbackText(e.target.value)} />
                 <div className="flex gap-2 mt-3">
                   <button onClick={handleSubmitFeedback} className="btn-primary flex-1 text-sm" disabled={!feedbackText.trim()}>Enviar</button>
                   <button onClick={() => setShowFeedback(false)} className="btn-ghost flex-1 text-sm">Cancelar</button>
@@ -423,6 +438,32 @@ export default function ChildProfile() {
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Delete account confirmation */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6" onClick={() => !deleteLoading && setShowDeleteConfirm(false)}>
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-card rounded-2xl p-6 w-full max-w-[340px] shadow-kiki-lg" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center"><AlertTriangle size={24} className="text-rust" /></div>
+              <div><h3 className="font-bold text-base">¿Eliminar cuenta?</h3><p className="text-xs text-muted-foreground">Esta acción es irreversible</p></div>
+            </div>
+            <div className="bg-red-50 rounded-xl p-3 mb-4">
+              <p className="text-xs text-rust">Al eliminar tu cuenta:</p>
+              <ul className="text-xs text-rust mt-1 space-y-0.5 list-disc pl-4">
+                <li>Se eliminarán todos tus datos</li>
+                <li>Se desvincularán todos los vínculos</li>
+                <li>Se borrarán todos los mensajes</li>
+                <li>Se eliminará tu email del sistema</li>
+                <li>No podrás recuperar esta cuenta</li>
+              </ul>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={handleDeleteAccount} disabled={deleteLoading} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white bg-rust disabled:opacity-60">{deleteLoading ? 'Eliminando...' : 'Sí, eliminar'}</button>
+              <button onClick={() => setShowDeleteConfirm(false)} disabled={deleteLoading} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground">Cancelar</button>
+            </div>
+          </motion.div>
         </div>
       )}
     </AppShell>

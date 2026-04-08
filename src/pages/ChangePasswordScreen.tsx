@@ -16,13 +16,13 @@ export default function ChangePasswordScreen() {
   const [newPass, setNewPass] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isRecovery, setIsRecovery] = useState(false);
 
   useEffect(() => {
-    // Check if this is a password recovery flow
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     if (hashParams.get('type') === 'recovery') {
       setIsRecovery(true);
@@ -47,8 +47,13 @@ export default function ChangePasswordScreen() {
     const { error: updateError } = await supabase.auth.updateUser({ password: newPass });
 
     if (updateError) {
-      setError(updateError.message);
-      setLoading(false);
+      // Fix: friendly error message for missing session
+      if (updateError.message.includes('Auth session missing') || updateError.message.includes('not authenticated')) {
+        setError('Tu sesión expiró. Volvé a iniciar sesión.');
+      } else {
+        setError(updateError.message);
+      }
+      setLoading(false); // Fix: reset loading on error
       return;
     }
 
@@ -113,7 +118,12 @@ export default function ChangePasswordScreen() {
 
           <div>
             <label className="text-sm font-medium text-foreground mb-1.5 block">Confirmar nueva contraseña</label>
-            <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} className="input-kiki" required />
+            <div className="relative">
+              <input type={showConfirm ? 'text' : 'password'} value={confirm} onChange={e => setConfirm(e.target.value)} className="input-kiki pr-10" required />
+              <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-label="Toggle confirm">
+                {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
           {error && <p className="text-sm text-rust font-medium">{error}</p>}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, ChevronRight, HelpCircle, Globe, Shield, Edit2, MessageSquarePlus, Save, X } from 'lucide-react';
+import { LogOut, ChevronRight, HelpCircle, Globe, Shield, Edit2, MessageSquarePlus, Save, X, Trash2, Bell, Settings, Activity, AlertTriangle } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
@@ -21,9 +21,17 @@ export default function KineProfile() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showMAAInfo, setShowMAAInfo] = useState(false);
 
   const [patientCount, setPatientCount] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // Settings
+  const [notifNewMessages, setNotifNewMessages] = useState(true);
+  const [notifAlerts, setNotifAlerts] = useState(true);
+  const [notifWeeklyReport, setNotifWeeklyReport] = useState(false);
 
   useEffect(() => {
     if (user) loadStats();
@@ -44,6 +52,18 @@ export default function KineProfile() {
       .eq('therapist_id', user.id)
       .eq('status', 'active');
     setPatientCount(count || 0);
+
+    // Load settings
+    const { data: settings } = await supabase
+      .from('user_settings')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+    if (settings) {
+      setNotifNewMessages(settings.therapist_messages);
+      setNotifWeeklyReport(settings.weekly_reports);
+    }
+
     setLoading(false);
   };
 
@@ -67,10 +87,44 @@ export default function KineProfile() {
   const handleSubmitFeedback = async () => {
     if (!feedbackText.trim() || !user) return;
     await supabase.from('feedback').insert({ user_id: user.id, text: feedbackText, type: 'comment' });
+    
+    // Also try sending via edge function
+    try {
+      await supabase.functions.invoke('send-feedback', {
+        body: { text: feedbackText, type: 'comment', userEmail: profile?.email || user.email, userName: profile?.name }
+      });
+    } catch {}
+    
     setFeedbackSent(true);
-    toast.success('Gracias por tu comentario');
+    toast.success('Gracias por tu comentario. Lo enviaremos a soporte.kikicare@gmail.com');
     setTimeout(() => { setShowFeedback(false); setFeedbackSent(false); setFeedbackText(''); }, 2000);
   };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    setDeleteLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-account');
+      if (error) throw error;
+      toast.success('Cuenta eliminada permanentemente');
+      await signOut();
+      navigate('/', { replace: true });
+    } catch (e: any) {
+      toast.error('Error al eliminar cuenta: ' + (e.message || 'Intenta de nuevo'));
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleSaveSetting = async (key: string, value: boolean) => {
+    if (!user) return;
+    const updates: any = { [key]: value, updated_at: new Date().toISOString() };
+    const { error } = await supabase
+      .from('user_settings')
+      .upsert({ user_id: user.id, ...updates }, { onConflict: 'user_id' });
+    if (!error) toast.success('Configuración actualizada');
+  };
+
+  const isDemo = profile?.email === 'kine@kikiapp.com';
 
   const stagger = {
     container: { transition: { staggerChildren: 0.06 } },
@@ -86,7 +140,7 @@ export default function KineProfile() {
         <motion.div variants={stagger.item} className="flex flex-col items-center">
           <AvatarCircle name={profile?.name || 'K'} color="#7EEDC4" size="lg" />
           <h2 className="text-xl font-bold mt-3">{profile?.name || 'Kinesiólogo'}</h2>
-          <p className="text-sm text-muted-foreground">{profile?.specialty || 'Kinesiología'}</p>
+          <p className="text-sm text-muted-foreground">{profile?.specialty || 'Sin especialidad asignada'}</p>
         </motion.div>
 
         {/* Stats */}
@@ -135,7 +189,7 @@ export default function KineProfile() {
                 {[
                   { label: 'Nombre', value: profile?.name || '-' },
                   { label: 'Email', value: profile?.email || '-' },
-                  { label: 'Especialidad', value: profile?.specialty || '-' },
+                  { label: 'Especialidad', value: profile?.specialty || 'Sin especialidad' },
                   { label: 'Institución', value: profile?.institution || '-' },
                   { label: 'Matrícula', value: profile?.matricula || '-' },
                 ].map(item => (
@@ -146,6 +200,72 @@ export default function KineProfile() {
                 ))}
               </>
             )}
+          </KikiCard>
+        </motion.div>
+
+        {/* MAA Engine Info */}
+        <motion.div variants={stagger.item}>
+          <KikiCard onClick={() => setShowMAAInfo(!showMAAInfo)} className="cursor-pointer bg-gradient-to-r from-blue-50 to-mint-50">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                <Activity size={20} className="text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold">Motor de Adherencia Adaptativa (MAA)</h3>
+                <p className="text-[10px] text-muted-foreground">Sistema inteligente de seguimiento de pacientes</p>
+              </div>
+              <ChevronRight size={16} className="text-muted-foreground" />
+            </div>
+            {showMAAInfo && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="mt-3 pt-3 border-t border-border space-y-2">
+                <p className="text-xs text-foreground">El MAA analiza automáticamente el comportamiento de cada familia para detectar riesgo de abandono terapéutico.</p>
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-semibold text-foreground">Variables analizadas:</p>
+                  {[
+                    { label: 'Frecuencia de sesiones', weight: '40%' },
+                    { label: 'Días de inactividad', weight: '30%' },
+                    { label: 'Duración de sesiones', weight: '20%' },
+                    { label: 'Tiempo de respuesta', weight: '10%' },
+                  ].map(v => (
+                    <div key={v.label} className="flex justify-between text-[10px]">
+                      <span className="text-muted-foreground">{v.label}</span>
+                      <span className="font-medium">{v.weight}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-semibold text-foreground">Niveles de riesgo:</p>
+                  <div className="flex gap-2">
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-mint-100 text-mint-700">Bajo (0-40)</span>
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Moderado (41-69)</span>
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-red-100 text-rust">Alto (70-100)</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground italic">Las alertas se muestran en la pantalla de inicio cuando se detecta riesgo moderado o alto en algún paciente.</p>
+              </motion.div>
+            )}
+          </KikiCard>
+        </motion.div>
+
+        {/* Notifications & Settings */}
+        <motion.div variants={stagger.item}>
+          <KikiCard>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              <Bell size={12} className="inline mr-1" /> Notificaciones
+            </h3>
+            {[
+              { label: 'Mensajes nuevos', value: notifNewMessages, onChange: (v: boolean) => { setNotifNewMessages(v); handleSaveSetting('therapist_messages', v); } },
+              { label: 'Alertas MAA (adherencia)', value: notifAlerts, onChange: (v: boolean) => { setNotifAlerts(v); handleSaveSetting('daily_reminder', v); } },
+              { label: 'Reporte semanal', value: notifWeeklyReport, onChange: (v: boolean) => { setNotifWeeklyReport(v); handleSaveSetting('weekly_reports', v); } },
+            ].map(item => (
+              <div key={item.label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                <span className="text-sm">{item.label}</span>
+                <button onClick={() => item.onChange(!item.value)}
+                  className={`w-10 h-5 rounded-full transition-colors relative ${item.value ? 'bg-mint' : 'bg-muted'}`}>
+                  <div className={`w-4 h-4 rounded-full bg-white shadow absolute top-0.5 transition-all ${item.value ? 'left-5' : 'left-0.5'}`} />
+                </button>
+              </div>
+            ))}
           </KikiCard>
         </motion.div>
 
@@ -175,6 +295,38 @@ export default function KineProfile() {
           </KikiCard>
         </motion.div>
 
+        {/* Demo reset */}
+        {isDemo && (
+          <motion.div variants={stagger.item}>
+            <KikiCard className="bg-amber-50 border border-amber-200">
+              <div className="flex items-center gap-3">
+                <Settings size={18} className="text-amber-600" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-800">Modo Demo</p>
+                  <p className="text-[10px] text-amber-600">Restaurá los datos originales si hiciste cambios para pruebas</p>
+                </div>
+              </div>
+              <button onClick={async () => {
+                try {
+                  const { error } = await supabase.functions.invoke('seed-demo-data');
+                  if (error) throw error;
+                  toast.success('Demo restaurado correctamente');
+                  window.location.reload();
+                } catch { toast.error('Error al resetear'); }
+              }} className="w-full mt-3 py-2 rounded-xl text-sm font-medium bg-amber-100 text-amber-800 active:bg-amber-200">
+                Resetear Demo
+              </button>
+            </KikiCard>
+          </motion.div>
+        )}
+
+        {/* Feedback */}
+        <motion.div variants={stagger.item}>
+          <button onClick={() => setShowFeedback(true)} className="w-full text-center py-2 text-sm text-muted-foreground font-medium">
+            <MessageSquarePlus size={14} className="inline mr-1" /> Enviar comentarios
+          </button>
+        </motion.div>
+
         {/* Logout */}
         <motion.div variants={stagger.item}>
           <button onClick={handleLogout} className="w-full text-center py-3 text-sm font-medium text-rust">
@@ -182,10 +334,10 @@ export default function KineProfile() {
           </button>
         </motion.div>
 
-        {/* Feedback */}
+        {/* Delete account */}
         <motion.div variants={stagger.item}>
-          <button onClick={() => setShowFeedback(true)} className="w-full text-center py-2 text-sm text-muted-foreground font-medium">
-            <MessageSquarePlus size={14} className="inline mr-1" /> Enviar comentarios
+          <button onClick={() => setShowDeleteConfirm(true)} className="w-full text-center py-2 text-sm text-muted-foreground/60">
+            <Trash2 size={12} className="inline mr-1" /> Eliminar cuenta
           </button>
         </motion.div>
       </motion.div>
@@ -198,10 +350,12 @@ export default function KineProfile() {
               <div className="text-center py-4">
                 <p className="text-2xl mb-2">🙏</p>
                 <h3 className="font-bold text-lg">Gracias por tu comentario</h3>
+                <p className="text-xs text-muted-foreground mt-1">Se enviará a soporte.kikicare@gmail.com</p>
               </div>
             ) : (
               <>
-                <h3 className="text-lg font-bold mb-3">Enviar comentarios</h3>
+                <h3 className="text-lg font-bold mb-1">Enviar comentarios</h3>
+                <p className="text-xs text-muted-foreground mb-3">Tu mensaje será enviado a soporte.kikicare@gmail.com</p>
                 <textarea className="input-kiki text-sm min-h-[100px] resize-none" placeholder="Escribí tu comentario…"
                   value={feedbackText} onChange={e => setFeedbackText(e.target.value)} />
                 <div className="flex gap-2 mt-3">
@@ -211,6 +365,44 @@ export default function KineProfile() {
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Delete account confirmation */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6" onClick={() => !deleteLoading && setShowDeleteConfirm(false)}>
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+            className="bg-card rounded-2xl p-6 w-full max-w-[340px] shadow-kiki-lg" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle size={24} className="text-rust" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base">¿Eliminar cuenta?</h3>
+                <p className="text-xs text-muted-foreground">Esta acción es irreversible</p>
+              </div>
+            </div>
+            <div className="bg-red-50 rounded-xl p-3 mb-4">
+              <p className="text-xs text-rust">Al eliminar tu cuenta:</p>
+              <ul className="text-xs text-rust mt-1 space-y-0.5 list-disc pl-4">
+                <li>Se eliminarán todos tus datos</li>
+                <li>Se desvincularán todos tus pacientes</li>
+                <li>Se borrarán todos los mensajes</li>
+                <li>Se eliminará tu email del sistema</li>
+                <li>No podrás recuperar esta cuenta</li>
+              </ul>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={handleDeleteAccount} disabled={deleteLoading}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white bg-rust disabled:opacity-60">
+                {deleteLoading ? 'Eliminando...' : 'Sí, eliminar'}
+              </button>
+              <button onClick={() => setShowDeleteConfirm(false)} disabled={deleteLoading}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground">
+                Cancelar
+              </button>
+            </div>
+          </motion.div>
         </div>
       )}
     </AppShell>

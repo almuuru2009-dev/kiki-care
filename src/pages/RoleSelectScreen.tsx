@@ -6,8 +6,8 @@ import kikiMascot from '@/assets/kiki-mascot.png';
 export default function RoleSelectScreen() {
   const navigate = useNavigate();
 
-  const handleSelect = (_role: 'kinesiologist' | 'caregiver') => {
-    navigate('/login');
+  const handleSelect = (role: 'kinesiologist' | 'caregiver') => {
+    navigate('/login', { state: { role } });
   };
 
   return (
