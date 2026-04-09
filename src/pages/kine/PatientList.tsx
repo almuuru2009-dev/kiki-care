@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Plus, X, Check, Mail, Archive, Unlink, ArchiveRestore, AlertTriangle, Users } from 'lucide-react';
+import { Search, Plus, X, Check, Mail, Archive, Unlink, ArchiveRestore, AlertTriangle, Users, Filter, FileText } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
@@ -18,6 +18,7 @@ interface PatientInfo {
   diagnosis: string | null;
   gmfcs: number | null;
   status: string;
+  sessionCount?: number;
 }
 
 export default function PatientList() {
@@ -27,16 +28,17 @@ export default function PatientList() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [gmfcsFilter, setGmfcsFilter] = useState<number | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
 
-  // Add patient modal
   const [showAddPatient, setShowAddPatient] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteSent, setInviteSent] = useState(false);
 
-  // Action modal
   const [actionPatient, setActionPatient] = useState<PatientInfo | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: 'archive' | 'unlink'; patient: PatientInfo } | null>(null);
+  const [generatingReport, setGeneratingReport] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) loadPatients();
@@ -44,19 +46,11 @@ export default function PatientList() {
 
   const loadPatients = async () => {
     if (!user) return;
-
     const { data: links } = await supabase
-      .from('therapist_caregiver_links')
-      .select('*')
-      .eq('therapist_id', user.id)
-      .in('status', ['active', 'pending', 'archived']);
+      .from('therapist_caregiver_links').select('*')
+      .eq('therapist_id', user.id).in('status', ['active', 'pending', 'archived']);
+    if (!links) { setLoading(false); return; }
 
-    if (!links) {
-      setLoading(false);
-      return;
-    }
-
-    // Get children
     const childIds = links.map(l => l.child_id).filter(Boolean) as string[];
     let childrenMap = new Map<string, any>();
     if (childIds.length > 0) {
@@ -64,7 +58,6 @@ export default function PatientList() {
       children?.forEach(c => childrenMap.set(c.id, c));
     }
 
-    // Get caregiver profiles
     const caregiverIds = links.map(l => l.caregiver_id).filter(Boolean) as string[];
     let profileMap = new Map<string, any>();
     if (caregiverIds.length > 0) {
@@ -76,8 +69,7 @@ export default function PatientList() {
       const child = link.child_id ? childrenMap.get(link.child_id) : null;
       const caregiver = link.caregiver_id ? profileMap.get(link.caregiver_id) : null;
       return {
-        linkId: link.id,
-        childId: link.child_id,
+        linkId: link.id, childId: link.child_id,
         childName: child?.name || 'Pendiente',
         caregiverName: caregiver?.name || link.caregiver_email,
         caregiverEmail: link.caregiver_email,
@@ -86,7 +78,6 @@ export default function PatientList() {
         status: link.status,
       };
     });
-
     setPatients(mapped);
     setLoading(false);
   };
@@ -96,92 +87,163 @@ export default function PatientList() {
   const displayPatients = showArchived ? archivedPatients : activePatients;
 
   const filtered = displayPatients.filter(p => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return p.childName.toLowerCase().includes(q) || p.caregiverName.toLowerCase().includes(q) || p.caregiverEmail.toLowerCase().includes(q);
+    if (search) {
+      const q = search.toLowerCase();
+      if (!p.childName.toLowerCase().includes(q) && !p.caregiverName.toLowerCase().includes(q) && !p.caregiverEmail.toLowerCase().includes(q)) return false;
+    }
+    if (gmfcsFilter !== null && p.gmfcs !== gmfcsFilter) return false;
+    return true;
   });
 
   const handleSendInvite = async () => {
-    if (!inviteEmail.trim() || !inviteEmail.includes('@')) {
-      toast.error('Ingresá un email válido');
-      return;
-    }
+    if (!inviteEmail.trim() || !inviteEmail.includes('@')) { toast.error('Ingresá un email válido'); return; }
     setInviteSending(true);
-
     try {
-      const { data: existing } = await supabase
-        .from('therapist_caregiver_links')
-        .select('id, status')
-        .eq('therapist_id', user!.id)
-        .eq('caregiver_email', inviteEmail.toLowerCase())
+      const { data: existing } = await supabase.from('therapist_caregiver_links')
+        .select('id, status').eq('therapist_id', user!.id).eq('caregiver_email', inviteEmail.toLowerCase())
         .in('status', ['pending', 'active']);
-
       if (existing && existing.length > 0) {
-        const st = existing[0].status;
-        toast.error(st === 'active' ? 'Ya tenés un vínculo activo con este email' : 'Ya hay una invitación pendiente para este email');
-        setInviteSending(false);
-        return;
+        toast.error(existing[0].status === 'active' ? 'Ya tenés un vínculo activo' : 'Ya hay una invitación pendiente');
+        setInviteSending(false); return;
       }
-
-      const { error } = await supabase
-        .from('therapist_caregiver_links')
-        .insert({
-          therapist_id: user!.id,
-          caregiver_email: inviteEmail.toLowerCase(),
-          status: 'pending',
-        });
-
-      if (error) {
-        toast.error('Error al enviar la invitación');
-      } else {
+      const { error } = await supabase.from('therapist_caregiver_links').insert({
+        therapist_id: user!.id, caregiver_email: inviteEmail.toLowerCase(), status: 'pending',
+      });
+      if (error) { toast.error('Error al enviar la invitación'); }
+      else {
         setInviteSent(true);
         toast.success(`Invitación enviada a ${inviteEmail}`);
         await loadPatients();
         setTimeout(() => { setShowAddPatient(false); setInviteEmail(''); setInviteSent(false); }, 2000);
       }
-    } catch {
-      toast.error('Error inesperado');
-    }
+    } catch { toast.error('Error inesperado'); }
     setInviteSending(false);
   };
 
   const handleArchive = async (linkId: string) => {
-    await supabase
-      .from('therapist_caregiver_links')
-      .update({ status: 'archived', responded_at: new Date().toISOString() })
-      .eq('id', linkId);
-    setConfirmAction(null);
-    setActionPatient(null);
-    toast.success('Paciente archivado');
-    await loadPatients();
+    await supabase.from('therapist_caregiver_links').update({ status: 'archived', responded_at: new Date().toISOString() }).eq('id', linkId);
+    setConfirmAction(null); setActionPatient(null);
+    toast.success('Paciente archivado'); await loadPatients();
   };
 
   const handleUnlink = async (linkId: string) => {
-    await supabase
-      .from('therapist_caregiver_links')
-      .update({ status: 'rejected', responded_at: new Date().toISOString() })
-      .eq('id', linkId);
-    setConfirmAction(null);
-    setActionPatient(null);
-    toast.success('Paciente desvinculado');
-    await loadPatients();
+    await supabase.from('therapist_caregiver_links').update({ status: 'rejected', responded_at: new Date().toISOString() }).eq('id', linkId);
+    setConfirmAction(null); setActionPatient(null);
+    toast.success('Paciente desvinculado'); await loadPatients();
   };
 
   const handleRestore = async (linkId: string) => {
-    await supabase
-      .from('therapist_caregiver_links')
-      .update({ status: 'active', responded_at: new Date().toISOString() })
-      .eq('id', linkId);
-    toast.success('Paciente restaurado');
-    await loadPatients();
+    await supabase.from('therapist_caregiver_links').update({ status: 'active', responded_at: new Date().toISOString() }).eq('id', linkId);
+    toast.success('Paciente restaurado'); await loadPatients();
+  };
+
+  const generateReport = async (patient: PatientInfo) => {
+    setGeneratingReport(patient.linkId);
+    try {
+      // Gather data
+      let sessions: any[] = [];
+      if (patient.childId) {
+        const { data } = await supabase.from('sessions').select('*').eq('child_id', patient.childId).order('completed_at', { ascending: false }).limit(30);
+        sessions = data || [];
+      }
+
+      const totalSessions = sessions.length;
+      const avgDifficulty = totalSessions > 0 ? (sessions.reduce((s, ss) => s + (ss.difficulty || 0), 0) / totalSessions).toFixed(1) : 'N/A';
+      const avgMood = totalSessions > 0 ? (sessions.reduce((s, ss) => s + (ss.child_mood || 3), 0) / totalSessions).toFixed(1) : 'N/A';
+      const painCount = sessions.filter(s => s.pain_reported).length;
+      const daysActive = new Set(sessions.map(s => new Date(s.completed_at).toISOString().split('T')[0])).size;
+      const dateRange = sessions.length > 0 ? `${new Date(sessions[sessions.length - 1].completed_at).toLocaleDateString('es-AR')} – ${new Date(sessions[0].completed_at).toLocaleDateString('es-AR')}` : 'Sin datos';
+
+      // Build HTML for DOCX-like download
+      const html = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+        <head><meta charset="utf-8"><title>Informe ${patient.childName}</title>
+        <style>
+          body { font-family: Calibri, Arial, sans-serif; margin: 40px; color: #1a1a2e; }
+          h1 { color: #1a1a2e; border-bottom: 2px solid #7EEDC4; padding-bottom: 8px; }
+          h2 { color: #1a1a2e; margin-top: 24px; }
+          table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+          th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+          th { background-color: #f0fdf4; }
+          .highlight { background-color: #f0fdf4; padding: 12px; border-radius: 6px; margin: 12px 0; }
+          .footer { margin-top: 40px; font-size: 11px; color: #666; border-top: 1px solid #ddd; padding-top: 12px; }
+        </style></head>
+        <body>
+          <h1>📋 Informe de Seguimiento — ${patient.childName}</h1>
+          <p><strong>Fecha del informe:</strong> ${new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+          <p><strong>Período analizado:</strong> ${dateRange}</p>
+          <p><strong>Kinesiólogo/a:</strong> Dr./a ${user?.email || ''}</p>
+          
+          <h2>Datos del paciente</h2>
+          <table>
+            <tr><th>Nombre</th><td>${patient.childName}</td></tr>
+            <tr><th>Diagnóstico</th><td>${patient.diagnosis || 'No especificado'}</td></tr>
+            <tr><th>GMFCS</th><td>${patient.gmfcs ? 'Nivel ' + patient.gmfcs : 'No especificado'}</td></tr>
+            <tr><th>Cuidador/a</th><td>${patient.caregiverName} (${patient.caregiverEmail})</td></tr>
+          </table>
+
+          <h2>Resumen de adherencia</h2>
+          <div class="highlight">
+            <table>
+              <tr><th>Total de sesiones</th><td>${totalSessions}</td></tr>
+              <tr><th>Días activos</th><td>${daysActive}</td></tr>
+              <tr><th>Dificultad promedio</th><td>${avgDifficulty}/5</td></tr>
+              <tr><th>Ánimo promedio</th><td>${avgMood}/5</td></tr>
+              <tr><th>Sesiones con dolor</th><td>${painCount} (${totalSessions > 0 ? Math.round(painCount / totalSessions * 100) : 0}%)</td></tr>
+            </table>
+          </div>
+
+          <h2>Historial de sesiones</h2>
+          <table>
+            <tr><th>Fecha</th><th>Dificultad</th><th>Ánimo</th><th>Dolor</th><th>Nota</th></tr>
+            ${sessions.slice(0, 20).map(s => `
+              <tr>
+                <td>${new Date(s.completed_at).toLocaleDateString('es-AR')}</td>
+                <td>${s.difficulty || '—'}/5</td>
+                <td>${s.child_mood || '—'}/5</td>
+                <td>${s.pain_reported ? '⚠️ Sí' : 'No'}</td>
+                <td>${s.note || '—'}</td>
+              </tr>
+            `).join('')}
+          </table>
+
+          <h2>Observaciones clínicas</h2>
+          <p>${totalSessions < 3 ? 'Datos insuficientes para generar observaciones clínicas (menos de 3 sesiones registradas).' :
+            `El paciente muestra una tendencia ${Number(avgDifficulty) > 3 ? 'alta' : Number(avgDifficulty) > 2 ? 'moderada' : 'baja'} en dificultad reportada. ${painCount > 0 ? `Se registró dolor en ${painCount} sesion(es), lo cual requiere seguimiento.` : 'No se reportaron episodios de dolor.'} El ánimo promedio es ${Number(avgMood) >= 4 ? 'bueno' : Number(avgMood) >= 3 ? 'neutral' : 'bajo'}.`
+          }</p>
+
+          <div class="footer">
+            <p>Generado automáticamente por KikiCare · ${new Date().toLocaleDateString('es-AR')} · Este informe es una herramienta de apoyo clínico y no reemplaza la evaluación profesional.</p>
+          </div>
+        </body></html>
+      `;
+
+      const blob = new Blob([html], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Informe_${patient.childName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.doc`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Informe descargado');
+    } catch (e: any) {
+      toast.error('Error generando informe');
+    }
+    setGeneratingReport(null);
   };
 
   return (
     <AppShell>
       <ScreenHeader title="Mis Pacientes" />
-
       <div className="px-4 pb-6">
-        {/* Tab: Active / Archived */}
+        {/* Top add button */}
+        <button onClick={() => setShowAddPatient(true)} className="btn-primary w-full text-sm mb-3">
+          <Plus size={14} className="inline mr-1" /> Agregar paciente
+        </button>
+
+        {/* Tabs */}
         <div className="flex gap-2 mb-3">
           <button onClick={() => setShowArchived(false)}
             className={`flex-1 py-2 rounded-full text-sm font-medium transition-colors ${!showArchived ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}>
@@ -193,11 +255,32 @@ export default function PatientList() {
           </button>
         </div>
 
-        {/* Search */}
-        <div className="relative mb-3">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input type="text" value={search} onChange={e => setSearch(e.target.value)} className="input-kiki pl-10" placeholder="Buscar paciente..." />
+        {/* Search + Filters */}
+        <div className="flex gap-2 mb-3">
+          <div className="relative flex-1">
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input type="text" value={search} onChange={e => setSearch(e.target.value)} className="input-kiki pl-10" placeholder="Buscar paciente..." />
+          </div>
+          <button onClick={() => setShowFilters(!showFilters)}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center ${gmfcsFilter !== null ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}>
+            <Filter size={18} />
+          </button>
         </div>
+
+        {/* GMFCS Filter */}
+        {showFilters && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mb-3">
+            <p className="text-xs font-medium text-muted-foreground mb-1.5">Filtrar por GMFCS</p>
+            <div className="flex gap-1.5">
+              {[null, 1, 2, 3, 4, 5].map(level => (
+                <button key={level ?? 'all'} onClick={() => setGmfcsFilter(level)}
+                  className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${gmfcsFilter === level ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}>
+                  {level === null ? 'Todos' : `${level}`}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {/* List */}
         {loading ? (
@@ -221,18 +304,18 @@ export default function PatientList() {
                         )}
                       </div>
                     </div>
+                    {/* Report button */}
+                    {p.status === 'active' && p.childId && (
+                      <button onClick={() => generateReport(p)}
+                        disabled={generatingReport === p.linkId}
+                        className="mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-muted/50 text-xs text-muted-foreground hover:bg-muted transition-colors">
+                        <FileText size={12} />
+                        {generatingReport === p.linkId ? 'Generando...' : 'Descargar informe'}
+                      </button>
+                    )}
                   </KikiCard>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (showArchived) {
-                        handleRestore(p.linkId);
-                      } else {
-                        setActionPatient(p);
-                      }
-                    }}
-                    className="absolute top-3 right-3 w-7 h-7 rounded-full bg-muted/80 flex items-center justify-center text-muted-foreground hover:bg-muted z-10"
-                  >
+                  <button onClick={(e) => { e.stopPropagation(); showArchived ? handleRestore(p.linkId) : setActionPatient(p); }}
+                    className="absolute top-3 right-3 w-7 h-7 rounded-full bg-muted/80 flex items-center justify-center text-muted-foreground hover:bg-muted z-10">
                     {showArchived ? <ArchiveRestore size={14} /> : <span className="text-xs font-bold">⋯</span>}
                   </button>
                 </div>
@@ -246,25 +329,11 @@ export default function PatientList() {
                 <p className="text-muted-foreground text-sm">
                   {showArchived ? 'No hay pacientes archivados' : 'No tenés pacientes aún'}
                 </p>
-                {!showArchived && (
-                  <p className="text-xs text-muted-foreground mt-1">Invitá a un cuidador/a para vincular un paciente</p>
-                )}
               </div>
             )}
           </div>
         )}
       </div>
-
-      {/* FAB */}
-      {!showArchived && (
-        <button
-          onClick={() => setShowAddPatient(true)}
-          className="fixed bottom-20 right-4 md:bottom-6 md:right-6 w-14 h-14 rounded-full bg-mint flex items-center justify-center shadow-lg active:scale-95 transition-transform z-10"
-          aria-label="Agregar paciente"
-        >
-          <Plus size={24} className="text-navy" />
-        </button>
-      )}
 
       {/* Add Patient Modal */}
       {showAddPatient && (
@@ -280,9 +349,7 @@ export default function PatientList() {
             ) : (
               <>
                 <h3 className="text-lg font-bold mb-1">Agregar paciente</h3>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Ingresá el email del cuidador/a. Recibirá una invitación para vincularse.
-                </p>
+                <p className="text-xs text-muted-foreground mb-4">Ingresá el email del cuidador/a.</p>
                 <div className="space-y-3">
                   <div className="relative">
                     <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -319,9 +386,7 @@ export default function PatientList() {
                 className="w-full flex items-center gap-3 py-3 px-4 rounded-xl bg-red-50 text-rust text-sm font-medium">
                 <Unlink size={18} /> Desvincular paciente
               </button>
-              <button onClick={() => setActionPatient(null)} className="w-full py-3 text-sm text-muted-foreground font-medium">
-                Cancelar
-              </button>
+              <button onClick={() => setActionPatient(null)} className="w-full py-3 text-sm text-muted-foreground font-medium">Cancelar</button>
             </div>
           </motion.div>
         </div>
@@ -340,20 +405,17 @@ export default function PatientList() {
                 <h3 className="font-bold text-base">¿Estás seguro?</h3>
                 <p className="text-xs text-muted-foreground">
                   {confirmAction.type === 'archive'
-                    ? `${confirmAction.patient.childName} será archivado. Podrás restaurarlo después.`
+                    ? `${confirmAction.patient.childName} será archivado.`
                     : `${confirmAction.patient.childName} será desvinculado permanentemente.`}
                 </p>
               </div>
             </div>
             <div className="flex gap-2">
-              <button
-                onClick={() => confirmAction.type === 'archive' ? handleArchive(confirmAction.patient.linkId) : handleUnlink(confirmAction.patient.linkId)}
+              <button onClick={() => confirmAction.type === 'archive' ? handleArchive(confirmAction.patient.linkId) : handleUnlink(confirmAction.patient.linkId)}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-medium text-white ${confirmAction.type === 'archive' ? 'bg-amber-500' : 'bg-rust'}`}>
                 {confirmAction.type === 'archive' ? 'Sí, archivar' : 'Sí, desvincular'}
               </button>
-              <button onClick={() => setConfirmAction(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground">
-                Cancelar
-              </button>
+              <button onClick={() => setConfirmAction(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground">Cancelar</button>
             </div>
           </motion.div>
         </div>
