@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Check, Info } from 'lucide-react';
+import { ArrowLeft, Check, Info, Upload, X } from 'lucide-react';
 import { KikiCard } from '@/components/kiki/KikiComponents';
+import { useAuthContext } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const bodyAreas = ['Miembros inferiores', 'Miembros superiores', 'Tronco y columna', 'Control cefálico', 'Global / integrado'];
 const objectives = ['Tono muscular', 'Control postural', 'Equilibrio', 'Elongación', 'Fortalecimiento', 'Función de mano', 'Transferencias', 'Marcha'];
@@ -23,12 +26,8 @@ function PillSelector({ options, selected, onToggle }: { options: string[]; sele
   return (
     <div className="flex flex-wrap gap-2">
       {options.map(o => (
-        <button
-          key={o}
-          type="button"
-          onClick={() => onToggle(o)}
-          className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${selected.includes(o) ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}
-        >
+        <button key={o} type="button" onClick={() => onToggle(o)}
+          className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${selected.includes(o) ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}>
           {selected.includes(o) && <Check size={10} className="inline mr-1" />}{o}
         </button>
       ))}
@@ -36,17 +35,23 @@ function PillSelector({ options, selected, onToggle }: { options: string[]; sele
   );
 }
 
+const MAX_VIDEO_SIZE = 200 * 1024 * 1024; // 200MB
+
 export default function CreateExerciseScreen() {
   const navigate = useNavigate();
+  const { user } = useAuthContext();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [saving, setSaving] = useState(false);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
   const [form, setForm] = useState({
     clinicalName: '', caregiverName: '',
     bodyAreas: [] as string[], objectives: [] as string[], gmfcs: [] as string[], ageRanges: [] as string[],
     indications: '', contraindications: '', clinicalObjective: '',
-    evidenceLevel: '',
-    reference: '',
+    evidenceLevel: '', reference: '',
     instructions: '', durationPerRep: '', reps: '', difficulty: '',
-    goodSigns: '', stopSigns: '',
-    caregiverPrecautions: '', variants: '',
+    goodSigns: '', stopSigns: '', caregiverPrecautions: '', variants: '',
   });
 
   const toggleArr = (field: keyof typeof form, val: string) => {
@@ -54,9 +59,74 @@ export default function CreateExerciseScreen() {
     setForm(prev => ({ ...prev, [field]: arr.includes(val) ? arr.filter(v => v !== val) : [...arr, val] }));
   };
 
-  const handleSave = () => {
-    // In a real app would save to store
-    navigate(-1);
+  const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_VIDEO_SIZE) {
+      toast.error('El video no puede superar los 200 MB');
+      return;
+    }
+    if (!file.type.startsWith('video/')) {
+      toast.error('Solo se permiten archivos de video (MP4, MOV)');
+      return;
+    }
+    setVideoFile(file);
+    toast.success(`Video seleccionado: ${file.name}`);
+  };
+
+  const validate = (): string | null => {
+    if (!form.clinicalName.trim()) return 'El nombre clínico es obligatorio';
+    if (form.bodyAreas.length === 0) return 'Seleccioná al menos un área corporal';
+    if (form.objectives.length === 0) return 'Seleccioná al menos un objetivo funcional';
+    if (form.gmfcs.length === 0) return 'Seleccioná al menos un nivel GMFCS';
+    if (!form.instructions.trim()) return 'Las instrucciones son obligatorias';
+    return null;
+  };
+
+  const handleSave = async (share = false) => {
+    const err = validate();
+    if (err) { toast.error(err); return; }
+    if (!user) return;
+
+    setSaving(true);
+    try {
+      let videoUrl: string | null = null;
+
+      // Upload video if present
+      if (videoFile) {
+        const ext = videoFile.name.split('.').pop();
+        const path = `${user.id}/${Date.now()}.${ext}`;
+        const { error: uploadErr } = await supabase.storage
+          .from('exercise-videos')
+          .upload(path, videoFile, { cacheControl: '3600', upsert: false });
+        if (uploadErr) {
+          toast.error('Error subiendo video: ' + uploadErr.message);
+          setSaving(false);
+          return;
+        }
+        const { data: urlData } = supabase.storage.from('exercise-videos').getPublicUrl(path);
+        videoUrl = urlData.publicUrl;
+      }
+
+      const { error } = await supabase.from('exercises').insert({
+        created_by: user.id,
+        name: form.clinicalName,
+        description: [form.caregiverName && `Nombre para cuidador: ${form.caregiverName}`, form.instructions, form.goodSigns && `Señales positivas: ${form.goodSigns}`, form.stopSigns && `Cuándo parar: ${form.stopSigns}`].filter(Boolean).join('\n\n'),
+        target_area: form.bodyAreas.join(', '),
+        duration: parseInt(form.durationPerRep) || 5,
+        sets: parseInt(form.reps) || 3,
+        reps: form.reps || '10 repeticiones',
+        video_url: videoUrl,
+        is_community: share,
+      });
+
+      if (error) throw error;
+      toast.success(share ? 'Ejercicio guardado y compartido a la comunidad' : 'Ejercicio guardado en tu biblioteca');
+      navigate(-1);
+    } catch (e: any) {
+      toast.error('Error guardando: ' + e.message);
+    }
+    setSaving(false);
   };
 
   return (
@@ -76,7 +146,7 @@ export default function CreateExerciseScreen() {
         <section className="space-y-3">
           <h2 className="text-sm font-semibold text-foreground">1. Identificación</h2>
           <div>
-            <label className="text-xs font-medium text-foreground block mb-1">Nombre clínico del ejercicio</label>
+            <label className="text-xs font-medium text-foreground block mb-1">Nombre clínico del ejercicio *</label>
             <input className="input-kiki text-sm" placeholder="Este nombre lo ves vos en el dashboard" value={form.clinicalName} onChange={e => setForm(p => ({ ...p, clinicalName: e.target.value }))} />
           </div>
           <div>
@@ -89,16 +159,15 @@ export default function CreateExerciseScreen() {
         <section className="space-y-3">
           <h2 className="text-sm font-semibold text-foreground">2. Clasificación clínica</h2>
           <div>
-            <label className="text-xs font-medium text-foreground block mb-1.5">Área corporal</label>
+            <label className="text-xs font-medium text-foreground block mb-1.5">Área corporal *</label>
             <PillSelector options={bodyAreas} selected={form.bodyAreas} onToggle={v => toggleArr('bodyAreas', v)} />
           </div>
           <div>
-            <label className="text-xs font-medium text-foreground block mb-1.5">Objetivo funcional</label>
+            <label className="text-xs font-medium text-foreground block mb-1.5">Objetivo funcional *</label>
             <PillSelector options={objectives} selected={form.objectives} onToggle={v => toggleArr('objectives', v)} />
           </div>
           <div>
-            <label className="text-xs font-medium text-foreground block mb-1.5">Nivel GMFCS sugerido</label>
-            <p className="text-[10px] text-muted-foreground mb-1">No es un filtro estricto — es una guía para encontrarlo.</p>
+            <label className="text-xs font-medium text-foreground block mb-1.5">Nivel GMFCS sugerido *</label>
             <PillSelector options={gmfcsLevels} selected={form.gmfcs} onToggle={v => toggleArr('gmfcs', v)} />
           </div>
           <div>
@@ -112,15 +181,11 @@ export default function CreateExerciseScreen() {
           <h2 className="text-sm font-semibold text-foreground">3. Contexto clínico</h2>
           <div>
             <label className="text-xs font-medium text-foreground block mb-1">Indicaciones clínicas <span className="text-muted-foreground">(opcional)</span></label>
-            <textarea className="input-kiki text-sm min-h-[60px] resize-none" placeholder="Solo lo ven otros terapeutas si compartís" value={form.indications} onChange={e => setForm(p => ({ ...p, indications: e.target.value }))} />
+            <textarea className="input-kiki text-sm min-h-[60px] resize-none" value={form.indications} onChange={e => setForm(p => ({ ...p, indications: e.target.value }))} />
           </div>
           <div>
             <label className="text-xs font-medium text-foreground block mb-1">Contraindicaciones <span className="text-muted-foreground">(opcional)</span></label>
             <textarea className="input-kiki text-sm min-h-[60px] resize-none" value={form.contraindications} onChange={e => setForm(p => ({ ...p, contraindications: e.target.value }))} />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-foreground block mb-1">Objetivo clínico (una línea)</label>
-            <input className="input-kiki text-sm" placeholder="Solo lo ves vos y los colegas" value={form.clinicalObjective} onChange={e => setForm(p => ({ ...p, clinicalObjective: e.target.value }))} />
           </div>
         </section>
 
@@ -129,64 +194,35 @@ export default function CreateExerciseScreen() {
           <h2 className="text-sm font-semibold text-foreground">4. Nivel de evidencia</h2>
           <div className="space-y-2">
             {evidenceLevels.map(ev => (
-              <button
-                key={ev.id}
-                type="button"
-                onClick={() => setForm(p => ({ ...p, evidenceLevel: ev.id }))}
-                className={`w-full text-left p-3 rounded-xl border-2 transition-colors ${form.evidenceLevel === ev.id ? 'border-mint bg-mint-50' : 'border-border bg-card'}`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{ev.icon}</span>
-                  <span className="text-sm font-medium">{ev.label}</span>
-                </div>
+              <button key={ev.id} type="button" onClick={() => setForm(p => ({ ...p, evidenceLevel: ev.id }))}
+                className={`w-full text-left p-3 rounded-xl border-2 transition-colors ${form.evidenceLevel === ev.id ? 'border-mint bg-mint-50' : 'border-border bg-card'}`}>
+                <div className="flex items-center gap-2"><span className="text-lg">{ev.icon}</span><span className="text-sm font-medium">{ev.label}</span></div>
                 <p className="text-xs text-muted-foreground mt-0.5 ml-7">{ev.desc}</p>
               </button>
             ))}
           </div>
-          <input className="input-kiki text-sm" placeholder="Referencia o fuente (opcional)" value={form.reference} onChange={e => setForm(p => ({ ...p, reference: e.target.value }))} />
         </section>
 
         {/* 5. Caregiver instructions */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">5. Instrucciones para el cuidador</h2>
-          <div>
-            <label className="text-xs font-medium text-foreground block mb-1">Instrucciones paso a paso</label>
-            <p className="text-[10px] text-muted-foreground mb-1">Escribí en segunda persona. Sin términos clínicos sin explicar. 4–6 oraciones.</p>
-            <textarea className="input-kiki text-sm min-h-[100px] resize-none" placeholder="Con Valentín acostado boca arriba, tomale la pierna…" value={form.instructions} onChange={e => setForm(p => ({ ...p, instructions: e.target.value }))} />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <KikiCard className="bg-mint-50 border border-mint-200 p-3">
-              <p className="text-[10px] font-semibold text-mint-700 mb-1">✓ Así sí</p>
-              <p className="text-[10px] text-mint-800 leading-relaxed">Con Martina acostada boca arriba, tomale la pierna desde atrás del muslo y levantala despacio.</p>
-            </KikiCard>
-            <KikiCard className="bg-red-50 border border-red-200 p-3">
-              <p className="text-[10px] font-semibold text-rust mb-1">✗ Así no</p>
-              <p className="text-[10px] text-red-800 leading-relaxed">Realizar elongación pasiva de isquiotibiales en decúbito dorsal.</p>
-            </KikiCard>
-          </div>
-
+          <h2 className="text-sm font-semibold text-foreground">5. Instrucciones para el cuidador *</h2>
+          <textarea className="input-kiki text-sm min-h-[100px] resize-none" placeholder="Instrucciones paso a paso en lenguaje simple…" value={form.instructions} onChange={e => setForm(p => ({ ...p, instructions: e.target.value }))} />
           <div className="flex gap-2">
             <div className="flex-1">
-              <label className="text-xs font-medium text-foreground block mb-1">Duración por repetición</label>
+              <label className="text-xs font-medium text-foreground block mb-1">Duración por rep</label>
               <input className="input-kiki text-sm" placeholder="Ej: 30 seg" value={form.durationPerRep} onChange={e => setForm(p => ({ ...p, durationPerRep: e.target.value }))} />
             </div>
             <div className="flex-1">
-              <label className="text-xs font-medium text-foreground block mb-1">Cantidad de repeticiones</label>
+              <label className="text-xs font-medium text-foreground block mb-1">Repeticiones</label>
               <input className="input-kiki text-sm" placeholder="Ej: 3" value={form.reps} onChange={e => setForm(p => ({ ...p, reps: e.target.value }))} />
             </div>
           </div>
-
           <div>
             <label className="text-xs font-medium text-foreground block mb-1.5">Nivel de dificultad</label>
             <div className="space-y-2">
               {difficultyLevels.map(d => (
-                <button
-                  key={d.id}
-                  type="button"
-                  onClick={() => setForm(p => ({ ...p, difficulty: d.id }))}
-                  className={`w-full text-left p-3 rounded-xl border-2 transition-colors ${form.difficulty === d.id ? `${d.color} border-current` : 'border-border bg-card'}`}
-                >
+                <button key={d.id} type="button" onClick={() => setForm(p => ({ ...p, difficulty: d.id }))}
+                  className={`w-full text-left p-3 rounded-xl border-2 transition-colors ${form.difficulty === d.id ? `${d.color} border-current` : 'border-border bg-card'}`}>
                   <p className="text-sm font-medium">{d.label}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{d.desc}</p>
                 </button>
@@ -197,7 +233,7 @@ export default function CreateExerciseScreen() {
 
         {/* 6. Observation */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">6. Qué observar durante el ejercicio</h2>
+          <h2 className="text-sm font-semibold text-foreground">6. Observación</h2>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[10px] font-semibold text-mint-700 block mb-1">Señales de que va bien</label>
@@ -210,41 +246,40 @@ export default function CreateExerciseScreen() {
           </div>
         </section>
 
-        {/* 7. Precautions */}
+        {/* 7. Video */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">7. Precauciones y variantes</h2>
-          <div>
-            <label className="text-xs font-medium text-foreground block mb-1">Precauciones para el cuidador <span className="text-muted-foreground">(opcional)</span></label>
-            <textarea className="input-kiki text-sm min-h-[60px] resize-none" value={form.caregiverPrecautions} onChange={e => setForm(p => ({ ...p, caregiverPrecautions: e.target.value }))} />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-foreground block mb-1">Variantes para días difíciles <span className="text-muted-foreground">(muy recomendado)</span></label>
-            <p className="text-[10px] text-muted-foreground mb-1">El cuidador ve esto cuando toca "hoy fue difícil".</p>
-            <textarea className="input-kiki text-sm min-h-[80px] resize-none" value={form.variants} onChange={e => setForm(p => ({ ...p, variants: e.target.value }))} />
-          </div>
-        </section>
-
-        {/* 8. Video */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">8. Video de referencia <span className="text-muted-foreground">(muy recomendado)</span></h2>
-          <div className="border-2 border-dashed border-border rounded-xl p-6 text-center">
-            <p className="text-sm text-muted-foreground mb-2">Subir video</p>
-            <p className="text-[10px] text-muted-foreground">MP4 o MOV · máximo 200 MB</p>
-            <p className="text-[10px] text-muted-foreground">30 seg a 2 min · ángulo lateral o frontal</p>
-            <button type="button" className="btn-secondary text-xs mt-3">Seleccionar archivo</button>
-          </div>
-          <div className="flex items-start gap-2 p-2 rounded-lg bg-muted/50">
-            <Info size={12} className="text-muted-foreground shrink-0 mt-0.5" />
-            <p className="text-[10px] text-muted-foreground">Consejo: Luz natural. Nada que tape la zona del cuerpo que se trabaja.</p>
-          </div>
+          <h2 className="text-sm font-semibold text-foreground">7. Video de referencia <span className="text-muted-foreground">(recomendado)</span></h2>
+          <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideoSelect} />
+          {videoFile ? (
+            <div className="border-2 border-mint rounded-xl p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-mint-50 flex items-center justify-center">📹</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{videoFile.name}</p>
+                <p className="text-[10px] text-muted-foreground">{(videoFile.size / (1024 * 1024)).toFixed(1)} MB</p>
+              </div>
+              <button onClick={() => setVideoFile(null)} className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="border-2 border-dashed border-border rounded-xl p-6 text-center cursor-pointer hover:border-mint transition-colors"
+              onClick={() => fileInputRef.current?.click()}>
+              <Upload size={24} className="mx-auto text-muted-foreground mb-2" />
+              <p className="text-sm text-muted-foreground mb-1">Subir video</p>
+              <p className="text-[10px] text-muted-foreground">MP4 o MOV · máximo 200 MB</p>
+              <button type="button" className="btn-secondary text-xs mt-3">Seleccionar archivo</button>
+            </div>
+          )}
         </section>
       </div>
 
       {/* Sticky footer */}
       <div className="sticky bottom-0 p-4 bg-background border-t border-border space-y-2">
-        <button onClick={handleSave} className="btn-primary w-full text-sm">Guardar en mis ejercicios</button>
+        <button onClick={() => handleSave(false)} className="btn-primary w-full text-sm" disabled={saving}>
+          {saving ? 'Guardando...' : 'Guardar en mis ejercicios'}
+        </button>
         <div className="flex gap-2">
-          <button onClick={handleSave} className="btn-secondary flex-1 text-xs py-2">Guardar y compartir</button>
+          <button onClick={() => handleSave(true)} className="btn-secondary flex-1 text-xs py-2" disabled={saving}>Guardar y compartir</button>
           <button onClick={() => navigate(-1)} className="btn-ghost flex-1 text-xs py-2">Descartar</button>
         </div>
       </div>
