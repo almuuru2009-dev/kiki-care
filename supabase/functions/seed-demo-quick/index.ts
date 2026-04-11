@@ -17,7 +17,8 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { step } = await req.json().catch(() => ({ step: "users" }));
+    const body = await req.json().catch(() => ({ step: "users" }));
+    const { step } = body;
     const results: string[] = [];
 
     if (step === "users") {
