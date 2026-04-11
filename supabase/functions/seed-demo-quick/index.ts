@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     }
 
     if (step === "data") {
-      const { kineId, careId } = await req.json().catch(() => ({}));
+      const { kineId, careId } = body;
       if (!kineId || !careId) throw new Error("Missing kineId/careId");
 
       // Create child + link
