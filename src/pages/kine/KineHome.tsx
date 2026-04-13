@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { AlertTriangle, MessageCircle, Activity, TrendingUp, ChevronRight, Users, BarChart3 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { AppShell } from '@/components/layout/AppShell';
-import { KikiCard, StatBadge, AvatarCircle, RiskBadge, AdherenceBar } from '@/components/kiki/KikiComponents';
+import { KikiCard, StatBadge, AvatarCircle, RiskBadge } from '@/components/kiki/KikiComponents';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { calculateRisk, type FamilyPattern } from '@/lib/maa';

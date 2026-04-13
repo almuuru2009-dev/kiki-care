@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Plus, X, Check, Mail, Archive, Unlink, ArchiveRestore, AlertTriangle, Users, Filter, FileText, ChevronDown } from 'lucide-react';
+import { Search, Plus, Mail, Archive, Unlink, ArchiveRestore, AlertTriangle, Users, Filter } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle, RiskBadge } from '@/components/kiki/KikiComponents';
@@ -51,7 +51,7 @@ export default function PatientList() {
   // Action modals
   const [actionPatient, setActionPatient] = useState<PatientInfo | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: 'archive' | 'unlink'; patient: PatientInfo } | null>(null);
-  const [generatingReport, setGeneratingReport] = useState<string | null>(null);
+  
 
   useEffect(() => {
     if (user) loadPatients();

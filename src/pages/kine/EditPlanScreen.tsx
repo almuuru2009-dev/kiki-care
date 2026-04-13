@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, X, Check, Save, ChevronUp, ChevronDown, Search } from 'lucide-react';
-import { KikiCard } from '@/components/kiki/KikiComponents';
+// Components
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';

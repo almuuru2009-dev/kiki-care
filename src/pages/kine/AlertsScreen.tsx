@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Info, MessageCircle, Settings, CheckCircle, ChevronDown } from 'lucide-react';
+import { Info, MessageCircle, Settings, CheckCircle } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle, RiskBadge } from '@/components/kiki/KikiComponents';
