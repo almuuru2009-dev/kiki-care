@@ -294,7 +294,7 @@ export default function PatientList() {
                       </div>
                     </div>
                   </KikiCard>
-                  <button onClick={(e) => { e.stopPropagation(); showArchived ? handleRestore(p.linkId) : setActionPatient(p); }}
+                  <button onClick={(e) => { e.stopPropagation(); if (showArchived) handleRestore(p.linkId); else setActionPatient(p); }}
                     className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-muted/80 flex items-center justify-center text-muted-foreground hover:bg-muted z-10">
                     {showArchived ? <ArchiveRestore size={12} /> : <span className="text-[10px] font-bold">⋯</span>}
                   </button>

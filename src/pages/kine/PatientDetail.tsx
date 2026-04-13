@@ -5,7 +5,7 @@ import { Edit, FileText, Archive, Trash2, MessageCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
-import { KikiCard, AvatarCircle, AdherenceBar, RiskBadge } from '@/components/kiki/KikiComponents';
+import { KikiCard, AvatarCircle, RiskBadge } from '@/components/kiki/KikiComponents';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { calculateRisk, type FamilyPattern } from '@/lib/maa';
