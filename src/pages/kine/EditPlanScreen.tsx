@@ -1,32 +1,118 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, X, GripVertical, Check, Save, ChevronUp, ChevronDown } from 'lucide-react';
-import { KikiCard } from '@/components/kiki/KikiComponents';
-import { useAppStore } from '@/stores/useAppStore';
+import { ArrowLeft, Plus, X, Check, Save, ChevronUp, ChevronDown, Search } from 'lucide-react';
+// Components
+import { useAuthContext } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
-const days = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+interface ExerciseOption {
+  id: string;
+  name: string;
+  duration: number | null;
+  sets: number | null;
+  reps: string | null;
+  target_area: string | null;
+}
+
+interface PlanItem {
+  id?: string; // existing plan row id
+  exerciseId: string;
+  exerciseName: string;
+  duration: number | null;
+  sets: number | null;
+  reps: string | null;
+  targetArea: string | null;
+  dayOfWeek: number[];
+}
 
 export default function EditPlanScreen() {
-  const { id } = useParams<{ id: string }>();
+  const { id: linkId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { patients, exercises, exercisePlans } = useAppStore();
+  const { user } = useAuthContext();
 
-  const patient = patients.find(p => p.id === id);
-  const existingPlan = exercisePlans.find(p => p.patientId === id);
-
-  const [planName, setPlanName] = useState(existingPlan?.name || 'Nuevo plan');
-  const [selectedDays, setSelectedDays] = useState(['Lun', 'Mar', 'Mié', 'Jue', 'Vie']);
-  const [durationWeeks, setDurationWeeks] = useState('4');
-  const [planExercises, setPlanExercises] = useState<string[]>(existingPlan?.exercises || ['ex-1', 'ex-2', 'ex-3']);
+  const [childId, setChildId] = useState<string | null>(null);
+  const [childName, setChildName] = useState('');
+  const [planItems, setPlanItems] = useState<PlanItem[]>([]);
+  const [availableExercises, setAvailableExercises] = useState<ExerciseOption[]>([]);
   const [searchEx, setSearchEx] = useState('');
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const toggleDay = (d: string) => setSelectedDays(prev => prev.includes(d) ? prev.filter(dd => dd !== d) : [...prev, d]);
-  const removeExercise = (exId: string) => setPlanExercises(prev => prev.filter(e => e !== exId));
-  const addExercise = (exId: string) => { setPlanExercises(prev => [...prev, exId]); setSearchEx(''); };
+  useEffect(() => {
+    if (user && linkId) loadPlan();
+  }, [user, linkId]);
+
+  const loadPlan = async () => {
+    if (!user || !linkId) return;
+
+    // Get link to find child_id
+    const { data: link } = await supabase.from('therapist_caregiver_links').select('child_id').eq('id', linkId).single();
+    if (!link?.child_id) { setLoading(false); return; }
+    setChildId(link.child_id);
+
+    // Get child name
+    const { data: child } = await supabase.from('children').select('name').eq('id', link.child_id).single();
+    setChildName(child?.name || '');
+
+    // Get existing treatment plans
+    const { data: plans } = await supabase.from('treatment_plans')
+      .select('id, exercise_id, day_of_week, active')
+      .eq('child_id', link.child_id)
+      .eq('therapist_id', user.id)
+      .eq('active', true);
+
+    // Get all user exercises
+    const { data: exercises } = await supabase.from('exercises')
+      .select('id, name, duration, sets, reps, target_area')
+      .eq('created_by', user.id);
+
+    const exList = exercises || [];
+    setAvailableExercises(exList);
+
+    // Map existing plans
+    if (plans && plans.length > 0) {
+      const exMap = new Map(exList.map(e => [e.id, e]));
+      const items: PlanItem[] = plans.map(p => {
+        const ex = exMap.get(p.exercise_id);
+        return {
+          id: p.id,
+          exerciseId: p.exercise_id,
+          exerciseName: ex?.name || 'Ejercicio',
+          duration: ex?.duration || null,
+          sets: ex?.sets || null,
+          reps: ex?.reps || null,
+          targetArea: ex?.target_area || null,
+          dayOfWeek: p.day_of_week || [1, 2, 3, 4, 5],
+        };
+      });
+      setPlanItems(items);
+    }
+
+    setLoading(false);
+  };
+
+  const addExercise = (ex: ExerciseOption) => {
+    if (planItems.some(p => p.exerciseId === ex.id)) return;
+    setPlanItems(prev => [...prev, {
+      exerciseId: ex.id,
+      exerciseName: ex.name,
+      duration: ex.duration,
+      sets: ex.sets,
+      reps: ex.reps,
+      targetArea: ex.target_area,
+      dayOfWeek: [1, 2, 3, 4, 5],
+    }]);
+    setSearchEx('');
+  };
+
+  const removeExercise = (exId: string) => setPlanItems(prev => prev.filter(p => p.exerciseId !== exId));
 
   const moveExercise = useCallback((index: number, direction: 'up' | 'down') => {
-    setPlanExercises(prev => {
+    setPlanItems(prev => {
       const newList = [...prev];
       const targetIndex = direction === 'up' ? index - 1 : index + 1;
       if (targetIndex < 0 || targetIndex >= newList.length) return prev;
@@ -35,12 +121,53 @@ export default function EditPlanScreen() {
     });
   }, []);
 
-  const availableExercises = exercises.filter(e => !planExercises.includes(e.id) && (e.name.toLowerCase().includes(searchEx.toLowerCase())));
-
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => navigate(-1), 1200);
+  const toggleDay = (exIndex: number, day: number) => {
+    setPlanItems(prev => prev.map((item, i) => {
+      if (i !== exIndex) return item;
+      const days = item.dayOfWeek.includes(day)
+        ? item.dayOfWeek.filter(d => d !== day)
+        : [...item.dayOfWeek, day].sort();
+      return { ...item, dayOfWeek: days };
+    }));
   };
+
+  const handleSave = async () => {
+    if (!user || !childId) return;
+    setSaving(true);
+
+    try {
+      // Deactivate all existing plans for this child
+      await supabase.from('treatment_plans')
+        .update({ active: false })
+        .eq('child_id', childId)
+        .eq('therapist_id', user.id);
+
+      // Insert new plan items
+      if (planItems.length > 0) {
+        const rows = planItems.map(item => ({
+          child_id: childId,
+          therapist_id: user.id,
+          exercise_id: item.exerciseId,
+          day_of_week: item.dayOfWeek,
+          active: true,
+        }));
+        const { error } = await supabase.from('treatment_plans').insert(rows);
+        if (error) throw error;
+      }
+
+      setSaved(true);
+      toast.success('Plan guardado');
+      setTimeout(() => navigate(-1), 1200);
+    } catch (e: any) {
+      toast.error('Error al guardar el plan');
+      setSaving(false);
+    }
+  };
+
+  const filteredAvailable = availableExercises.filter(e =>
+    !planItems.some(p => p.exerciseId === e.id) &&
+    e.name.toLowerCase().includes(searchEx.toLowerCase())
+  );
 
   if (saved) {
     return (
@@ -54,6 +181,14 @@ export default function EditPlanScreen() {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="mobile-frame flex flex-col min-h-screen bg-background items-center justify-center">
+        <div className="w-8 h-8 border-2 border-mint border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="mobile-frame flex flex-col min-h-screen bg-background">
       <div className="px-4 pt-4 flex items-center gap-3">
@@ -62,84 +197,85 @@ export default function EditPlanScreen() {
         </button>
         <div className="flex-1">
           <h1 className="text-lg font-semibold">Editar plan</h1>
-          <p className="text-[11px] text-muted-foreground">{patient?.name}</p>
+          <p className="text-[11px] text-muted-foreground">{childName}</p>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pt-4 pb-28 space-y-5">
-        <div>
-          <label className="text-xs font-medium block mb-1">Nombre del plan</label>
-          <input className="input-kiki text-sm" value={planName} onChange={e => setPlanName(e.target.value)} />
-        </div>
-
-        <div>
-          <label className="text-xs font-medium block mb-1.5">Días de la semana</label>
-          <div className="flex gap-2">
-            {days.map(d => (
-              <button key={d} type="button" onClick={() => toggleDay(d)}
-                className={`w-10 h-10 rounded-full text-xs font-medium transition-colors ${selectedDays.includes(d) ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}>
-                {d}
-              </button>
-            ))}
-          </div>
-          <p className="text-[10px] text-muted-foreground mt-1">{selectedDays.length} veces por semana</p>
-        </div>
-
-        <div>
-          <label className="text-xs font-medium block mb-1">Duración (semanas)</label>
-          <input type="number" className="input-kiki text-sm w-24" value={durationWeeks} onChange={e => setDurationWeeks(e.target.value)} min="1" max="52" />
-        </div>
-
+      <div className="flex-1 overflow-y-auto px-4 pt-4 pb-28 space-y-4">
+        {/* Current exercises */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs font-medium">Ejercicios del plan</label>
-            <span className="text-[10px] text-muted-foreground">{planExercises.length} ejercicios</span>
+            <span className="text-[10px] text-muted-foreground">{planItems.length} ejercicios</span>
           </div>
 
-          <div className="space-y-2 mb-3">
-            {planExercises.map((exId, index) => {
-              const ex = exercises.find(e => e.id === exId);
-              if (!ex) return null;
-              return (
-                <div key={exId} className="flex items-center gap-2 p-2.5 rounded-xl bg-muted/50 border border-border">
-                  <div className="flex flex-col gap-0.5 shrink-0">
-                    <button onClick={() => moveExercise(index, 'up')} disabled={index === 0}
-                      className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5" aria-label="Mover arriba">
-                      <ChevronUp size={12} />
+          {planItems.length === 0 ? (
+            <div className="text-center py-6 text-sm text-muted-foreground">
+              Buscá ejercicios abajo para agregarlos al plan
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {planItems.map((item, index) => (
+                <div key={item.exerciseId} className="p-2.5 rounded-xl bg-muted/50 border border-border">
+                  <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-0.5 shrink-0">
+                      <button onClick={() => moveExercise(index, 'up')} disabled={index === 0}
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5">
+                        <ChevronUp size={12} />
+                      </button>
+                      <button onClick={() => moveExercise(index, 'down')} disabled={index === planItems.length - 1}
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5">
+                        <ChevronDown size={12} />
+                      </button>
+                    </div>
+                    <div className="w-8 h-8 rounded-lg bg-mint-50 flex items-center justify-center shrink-0">
+                      <span className="text-xs">🏋️</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{item.exerciseName}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {item.duration ? `${item.duration}min` : ''}{item.sets ? ` · ${item.sets}×${item.reps || '10'}` : ''}
+                      </p>
+                    </div>
+                    <button onClick={() => removeExercise(item.exerciseId)} className="text-muted-foreground hover:text-rust p-1">
+                      <X size={14} />
                     </button>
-                    <button onClick={() => moveExercise(index, 'down')} disabled={index === planExercises.length - 1}
-                      className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5" aria-label="Mover abajo">
-                      <ChevronDown size={12} />
-                    </button>
                   </div>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: ex.thumbnailColor + '30' }}>
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: ex.thumbnailColor }} />
+                  {/* Day selector */}
+                  <div className="flex gap-1 mt-2 ml-8">
+                    {dayNames.map((name, dayIdx) => (
+                      <button key={dayIdx} onClick={() => toggleDay(index, dayIdx)}
+                        className={`w-7 h-7 rounded-full text-[10px] font-medium transition-colors ${item.dayOfWeek.includes(dayIdx) ? 'bg-mint text-navy' : 'bg-muted/80 text-muted-foreground'}`}>
+                        {name[0]}
+                      </button>
+                    ))}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{ex.name}</p>
-                    <p className="text-[10px] text-muted-foreground">{ex.duration}min · {ex.sets}×{ex.reps}</p>
-                  </div>
-                  <button onClick={() => removeExercise(exId)} className="text-muted-foreground hover:text-rust p-1" aria-label="Quitar">
-                    <X size={14} />
-                  </button>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
+        </div>
 
+        {/* Search exercises */}
+        <div>
+          <label className="text-xs font-medium block mb-1.5">Agregar ejercicio</label>
           <div className="relative">
-            <input className="input-kiki text-sm" placeholder="Buscar ejercicio para agregar…" value={searchEx} onChange={e => setSearchEx(e.target.value)} />
-            {searchEx && availableExercises.length > 0 && (
-              <div className="absolute top-full left-0 right-0 bg-card border border-border rounded-xl mt-1 shadow-kiki z-10 max-h-40 overflow-y-auto">
-                {availableExercises.slice(0, 5).map(ex => (
-                  <button key={ex.id} onClick={() => addExercise(ex.id)} className="w-full text-left px-3 py-2 text-sm hover:bg-muted border-b border-border last:border-0">
-                    <p className="font-medium text-xs">{ex.name}</p>
-                    <p className="text-[10px] text-muted-foreground">{ex.targetArea} · {ex.duration}min</p>
-                  </button>
-                ))}
-              </div>
-            )}
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input className="input-kiki text-sm pl-9" placeholder="Buscar ejercicio…" value={searchEx} onChange={e => setSearchEx(e.target.value)} />
           </div>
+          {searchEx && filteredAvailable.length > 0 && (
+            <div className="bg-card border border-border rounded-xl mt-1 shadow-kiki max-h-40 overflow-y-auto">
+              {filteredAvailable.slice(0, 5).map(ex => (
+                <button key={ex.id} onClick={() => addExercise(ex)} className="w-full text-left px-3 py-2 text-sm hover:bg-muted border-b border-border last:border-0">
+                  <p className="font-medium text-xs">{ex.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{ex.target_area || ''} {ex.duration ? `· ${ex.duration}min` : ''}</p>
+                </button>
+              ))}
+            </div>
+          )}
+          {searchEx && filteredAvailable.length === 0 && (
+            <p className="text-xs text-muted-foreground mt-1">Sin resultados. Creá ejercicios en la Biblioteca.</p>
+          )}
 
           <button onClick={() => navigate('/kine/exercises')} className="btn-ghost text-xs mt-2 w-full text-mint-600">
             <Plus size={12} className="inline mr-1" /> Buscar en biblioteca
@@ -148,8 +284,8 @@ export default function EditPlanScreen() {
       </div>
 
       <div className="sticky bottom-0 p-4 bg-background border-t border-border space-y-2">
-        <button onClick={handleSave} className="btn-primary w-full text-sm">
-          <Save size={14} className="inline mr-1" /> Guardar y notificar a la cuidadora
+        <button onClick={handleSave} disabled={saving} className="btn-primary w-full text-sm">
+          <Save size={14} className="inline mr-1" /> {saving ? 'Guardando...' : 'Guardar plan'}
         </button>
         <button onClick={() => navigate(-1)} className="btn-ghost w-full text-xs">Cancelar</button>
       </div>
