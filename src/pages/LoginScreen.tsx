@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 import kikiMascot from '@/assets/kiki-mascot.png';
 
 export default function LoginScreen() {
@@ -16,9 +15,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [roleMessage, setRoleMessage] = useState('');
 
-  // Get selected role from URL state (passed from RoleSelectScreen)
   const selectedRole = (location.state as any)?.role as 'kinesiologist' | 'caregiver' | undefined;
 
   useEffect(() => {
@@ -27,20 +24,14 @@ export default function LoginScreen() {
     }
   }, [user, profile]);
 
-  const redirectByRole = async (prof: { role: string; onboarding_completed?: boolean }) => {
-    if (prof.role === 'kinesiologist') {
-      setRoleMessage('Iniciando como kinesiólogo...');
-    } else {
-      setRoleMessage('Iniciando como cuidador...');
-    }
-
+  const redirectByRole = async (prof: { role: string; onboarding_completed?: boolean | null }) => {
     if (!prof.onboarding_completed) {
-      setTimeout(() => navigate('/onboarding', { replace: true }), 600);
+      navigate('/onboarding', { replace: true });
       return;
     }
 
     if (prof.role === 'kinesiologist') {
-      setTimeout(() => navigate('/kine/home', { replace: true }), 600);
+      navigate('/kine/home', { replace: true });
     } else {
       if (user?.email) {
         const { data } = await supabase
@@ -51,7 +42,7 @@ export default function LoginScreen() {
           .limit(1);
 
         if (data && data.length > 0) {
-          setTimeout(() => navigate('/pending-invitations', { replace: true }), 600);
+          navigate('/pending-invitations', { replace: true });
           return;
         }
       }
@@ -72,7 +63,7 @@ export default function LoginScreen() {
           console.error('Error creating child:', e);
         }
       }
-      setTimeout(() => navigate('/cuidadora/home', { replace: true }), 600);
+      navigate('/cuidadora/home', { replace: true });
     }
   };
 
@@ -82,7 +73,7 @@ export default function LoginScreen() {
     setLoading(true);
 
     const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim(),
       password,
     });
 
@@ -96,41 +87,11 @@ export default function LoginScreen() {
       return;
     }
 
-    if (data.user) {
-      // Check role matches selected role
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .single();
-
-      if (profileData && selectedRole && profileData.role !== selectedRole) {
-        await supabase.auth.signOut();
-        const roleLabel = selectedRole === 'kinesiologist' ? 'kinesiólogo' : 'cuidador';
-        const actualRoleLabel = profileData.role === 'kinesiologist' ? 'kinesiólogo' : 'cuidador';
-        setError(`Tu cuenta fue registrada como ${actualRoleLabel}. No podés iniciar sesión como ${roleLabel}.`);
-        setLoading(false);
-        return;
-      }
-
-      toast.success('¡Bienvenido!');
-    }
+    // Profile will be loaded by AuthContext and useEffect will handle redirect
     setLoading(false);
   };
 
   const roleLabel = selectedRole === 'kinesiologist' ? 'Kinesiólogo' : selectedRole === 'caregiver' ? 'Cuidador/a' : null;
-
-  if (roleMessage) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background max-w-[420px] mx-auto">
-        <img src={kikiMascot} alt="Kiki" className="w-20 h-20 object-contain mb-4" />
-        <motion.p className="text-lg font-semibold text-foreground" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          {roleMessage}
-        </motion.p>
-        <div className="w-6 h-6 border-2 border-mint border-t-transparent rounded-full animate-spin mt-4" />
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col min-h-screen bg-background max-w-[420px] mx-auto">

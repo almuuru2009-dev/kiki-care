@@ -27,7 +27,6 @@ export default function RegisterScreen() {
   const [done, setDone] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const [checkingEmail, setCheckingEmail] = useState(false);
 
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -38,7 +37,7 @@ export default function RegisterScreen() {
     setErrors(prev => ({ ...prev, [field]: '' }));
   };
 
-  const validateStep1 = async () => {
+  const validateStep1 = () => {
     const e: Record<string, string> = {};
     if (!formData.name.trim()) e.name = 'Ingresá tu nombre';
     if (!formData.email.trim()) e.email = 'Ingresá tu email';
@@ -50,29 +49,7 @@ export default function RegisterScreen() {
     }
     if (formData.password !== formData.confirmPassword) e.confirmPassword = 'Las contraseñas no coinciden';
     setErrors(e);
-    if (Object.keys(e).length > 0) return false;
-
-    // Check email availability on step 1
-    setCheckingEmail(true);
-    try {
-      const { data } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: { data: { _check_only: 'true' } },
-      });
-      // If identities is empty, user already exists
-      if (data.user && data.user.identities && data.user.identities.length === 0) {
-        setErrors({ email: 'Este correo ya está en uso. Intentá iniciar sesión.' });
-        setCheckingEmail(false);
-        return false;
-      }
-      // Clean up the dummy signup - sign out silently
-      await supabase.auth.signOut();
-    } catch {
-      // If error, email might already exist
-    }
-    setCheckingEmail(false);
-    return true;
+    return Object.keys(e).length === 0;
   };
 
   const validateStep2Kine = () => {
@@ -118,8 +95,10 @@ export default function RegisterScreen() {
       if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already been registered') || error.message.toLowerCase().includes('user already registered')) {
         setErrors({ email: 'Este correo ya está en uso. Intentá iniciar sesión.' });
         setStep(1);
+      } else if (error.message.toLowerCase().includes('rate limit') || error.message.toLowerCase().includes('security purposes')) {
+        setErrors({ email: 'Demasiados intentos. Esperá unos segundos e intentá de nuevo.' });
       } else {
-        toast.error(error.message);
+        toast.error('Error al crear la cuenta. Intentá de nuevo.');
       }
       setLoading(false);
       return;
@@ -131,6 +110,9 @@ export default function RegisterScreen() {
       setLoading(false);
       return;
     }
+
+    // Sign out immediately - user needs to verify email first
+    await supabase.auth.signOut();
 
     if (role === 'caregiver' && formData.childName && data.user) {
       localStorage.setItem('kikicare_pending_child', JSON.stringify({
@@ -147,9 +129,8 @@ export default function RegisterScreen() {
 
   const pwdValid = passwordRules.map(r => ({ ...r, pass: r.test(formData.password) }));
 
-  const handleStep1Next = async () => {
-    const valid = await validateStep1();
-    if (valid) setStep(2);
+  const handleStep1Next = () => {
+    if (validateStep1()) setStep(2);
   };
 
   const handleStep2Next = () => {
@@ -186,7 +167,7 @@ export default function RegisterScreen() {
             </div>
             <h2 className="text-xl font-bold text-foreground">¡Cuenta creada!</h2>
             <p className="text-sm text-muted-foreground mt-2 text-center px-4">
-              Revisá tu email para verificar tu cuenta antes de iniciar sesión.
+              Te enviamos un email de verificación. Revisá tu bandeja de entrada y hacé click en el enlace para activar tu cuenta.
             </p>
             <button onClick={() => navigate('/login')} className="btn-primary mt-6 px-8">
               Ir al inicio de sesión
@@ -221,7 +202,7 @@ export default function RegisterScreen() {
                   {formData.password && (
                     <div className="mt-2 space-y-1">
                       {pwdValid.map((r, i) => (
-                        <div key={i} className={`flex items-center gap-1.5 text-xs ${r.pass ? 'text-mint-600' : 'text-rust'}`}>
+                        <div key={i} className={`flex items-center gap-1.5 text-xs ${r.pass ? 'text-mint-600' : 'text-muted-foreground'}`}>
                           {r.pass ? <Check size={12} /> : <AlertCircle size={12} />}
                           <span>{r.label}</span>
                         </div>
@@ -234,8 +215,8 @@ export default function RegisterScreen() {
                   <input className={`input-kiki ${errors.confirmPassword ? 'border-rust' : ''}`} placeholder="Confirmar contraseña" type="password" value={formData.confirmPassword} onChange={e => handleChange('confirmPassword', e.target.value)} maxLength={20} />
                   {errors.confirmPassword && <p className="text-xs text-rust mt-1">{errors.confirmPassword}</p>}
                 </div>
-                <button onClick={handleStep1Next} disabled={checkingEmail} className="btn-primary w-full disabled:opacity-60">
-                  {checkingEmail ? 'Verificando email...' : 'Siguiente'}
+                <button onClick={handleStep1Next} className="btn-primary w-full">
+                  Siguiente
                 </button>
               </div>
             )}
@@ -387,32 +368,34 @@ export default function RegisterScreen() {
 
 function TermsContent() {
   return (
-    <div className="prose prose-sm max-w-none text-foreground">
-      <h4>1. Aceptación de los Términos</h4>
-      <p>Al utilizar KikiCare, aceptás estos términos y condiciones en su totalidad.</p>
-      <h4>2. Descripción del Servicio</h4>
-      <p>KikiCare es una plataforma de apoyo a la rehabilitación pediátrica que conecta kinesiólogos con cuidadores/as.</p>
-      <h4>3. Responsabilidades</h4>
-      <p>KikiCare no reemplaza la supervisión médica profesional. Siempre consultá con tu profesional de salud.</p>
-      <h4>4. Privacidad</h4>
-      <p>Tus datos se manejan conforme a nuestra Política de Privacidad.</p>
-      <h4>5. Modificaciones</h4>
-      <p>Nos reservamos el derecho de modificar estos términos en cualquier momento.</p>
+    <div className="text-sm text-muted-foreground space-y-3">
+      <h4 className="font-semibold text-foreground">1. Aceptación</h4>
+      <p>Al usar KikiCare aceptás estos términos. Si no estás de acuerdo, no uses la app.</p>
+      <h4 className="font-semibold text-foreground">2. Uso de la aplicación</h4>
+      <p>KikiCare es una herramienta de apoyo para la rehabilitación domiciliaria. No reemplaza el criterio profesional.</p>
+      <h4 className="font-semibold text-foreground">3. Cuentas</h4>
+      <p>Sos responsable de la seguridad de tu cuenta. No compartas tus credenciales.</p>
+      <h4 className="font-semibold text-foreground">4. Datos</h4>
+      <p>Los datos ingresados son tratados conforme a la Ley 25.326 de Protección de Datos Personales.</p>
+      <h4 className="font-semibold text-foreground">5. Limitación de responsabilidad</h4>
+      <p>KikiCare no se responsabiliza por decisiones clínicas tomadas en base a la información de la app.</p>
     </div>
   );
 }
 
 function PrivacyContent() {
   return (
-    <div className="prose prose-sm max-w-none text-foreground">
-      <h4>1. Datos Recopilados</h4>
-      <p>Recopilamos datos personales como nombre, email y datos de salud del niño/a para brindar el servicio.</p>
-      <h4>2. Uso de los Datos</h4>
-      <p>Los datos se utilizan exclusivamente para el funcionamiento de la plataforma y la comunicación entre profesionales y cuidadores.</p>
-      <h4>3. Seguridad</h4>
-      <p>Implementamos medidas de seguridad para proteger tu información personal y de salud.</p>
-      <h4>4. Derechos</h4>
-      <p>Podés acceder, modificar o eliminar tus datos en cualquier momento desde tu perfil.</p>
+    <div className="text-sm text-muted-foreground space-y-3">
+      <h4 className="font-semibold text-foreground">1. Datos recopilados</h4>
+      <p>Recopilamos nombre, email, datos del niño y registros de sesiones de ejercicios.</p>
+      <h4 className="font-semibold text-foreground">2. Uso de datos</h4>
+      <p>Los datos se usan exclusivamente para el funcionamiento de la app y seguimiento terapéutico.</p>
+      <h4 className="font-semibold text-foreground">3. Almacenamiento</h4>
+      <p>Los datos se almacenan en servidores seguros con encriptación.</p>
+      <h4 className="font-semibold text-foreground">4. Derechos</h4>
+      <p>Podés solicitar la eliminación de tu cuenta y todos tus datos en cualquier momento.</p>
+      <h4 className="font-semibold text-foreground">5. Contacto</h4>
+      <p>Para consultas: soporte.kikicare@gmail.com</p>
     </div>
   );
 }
