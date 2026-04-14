@@ -46,7 +46,7 @@ export default function ProgressScreen() {
   const navigate = useNavigate();
   const { user } = useAuthContext();
   const [sessions, setSessions] = useState<SessionData[]>([]);
-  const [childName, setChildName] = useState('Mi niño');
+  const [, setChildName] = useState('Mi niño');
   const [loading, setLoading] = useState(true);
   const [medals, setMedals] = useState<MedalData[]>([]);
   const [totalPoints, setTotalPoints] = useState(0);
@@ -55,6 +55,7 @@ export default function ProgressScreen() {
 
   useEffect(() => {
     if (user) loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const loadData = async () => {
@@ -133,6 +134,7 @@ export default function ProgressScreen() {
       } else if (d < checkDate) break;
     }
     return count;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessions]);
 
   // Week sessions

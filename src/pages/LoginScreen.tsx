@@ -22,6 +22,7 @@ export default function LoginScreen() {
     if (user && profile) {
       redirectByRole(profile);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, profile]);
 
   const redirectByRole = async (prof: { role: string; onboarding_completed?: boolean | null }) => {
@@ -72,7 +73,7 @@ export default function LoginScreen() {
     setError('');
     setLoading(true);
 
-    const { data, error: authError } = await supabase.auth.signInWithPassword({
+    const { error: authError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
