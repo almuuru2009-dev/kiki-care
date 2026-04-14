@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, ChevronRight, HelpCircle, Globe, Shield, Edit2, MessageSquarePlus, Save, X, Trash2, Bell, Settings, Activity, AlertTriangle } from 'lucide-react';
+import { LogOut, ChevronRight, HelpCircle, Globe, Shield, Edit2, MessageSquarePlus, Save, X, Trash2, Bell, Activity, AlertTriangle } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
@@ -123,8 +123,6 @@ export default function KineProfile() {
       .upsert({ user_id: user.id, ...updates }, { onConflict: 'user_id' });
     if (!error) toast.success('Configuración actualizada');
   };
-
-  const isDemo = profile?.email === 'kine@kikiapp.com';
 
   const stagger = {
     container: { transition: { staggerChildren: 0.06 } },
@@ -295,30 +293,6 @@ export default function KineProfile() {
           </KikiCard>
         </motion.div>
 
-        {/* Demo reset */}
-        {isDemo && (
-          <motion.div variants={stagger.item}>
-            <KikiCard className="bg-amber-50 border border-amber-200">
-              <div className="flex items-center gap-3">
-                <Settings size={18} className="text-amber-600" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-amber-800">Modo Demo</p>
-                  <p className="text-[10px] text-amber-600">Restaurá los datos originales si hiciste cambios para pruebas</p>
-                </div>
-              </div>
-              <button onClick={async () => {
-                try {
-                  const { error } = await supabase.functions.invoke('seed-demo-data');
-                  if (error) throw error;
-                  toast.success('Demo restaurado correctamente');
-                  window.location.reload();
-                } catch { toast.error('Error al resetear'); }
-              }} className="w-full mt-3 py-2 rounded-xl text-sm font-medium bg-amber-100 text-amber-800 active:bg-amber-200">
-                Resetear Demo
-              </button>
-            </KikiCard>
-          </motion.div>
-        )}
 
         {/* Feedback */}
         <motion.div variants={stagger.item}>
