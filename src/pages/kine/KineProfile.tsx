@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, ChevronRight, HelpCircle, Globe, Shield, Edit2, MessageSquarePlus, Save, X, Trash2, Bell, Settings, Activity, AlertTriangle } from 'lucide-react';
+import { LogOut, ChevronRight, HelpCircle, Globe, Shield, Edit2, MessageSquarePlus, Save, X, Trash2, Bell, Activity, AlertTriangle } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
@@ -123,8 +123,6 @@ export default function KineProfile() {
       .upsert({ user_id: user.id, ...updates }, { onConflict: 'user_id' });
     if (!error) toast.success('Configuración actualizada');
   };
-
-  const isDemo = profile?.email === 'kine@kikiapp.com';
 
   const stagger = {
     container: { transition: { staggerChildren: 0.06 } },

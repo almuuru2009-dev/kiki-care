@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Send, LogOut, Mail, ChevronRight, Edit2, HelpCircle, Shield, Globe, MessageSquarePlus, UserMinus, Save, X, Trash2, AlertTriangle, Settings } from 'lucide-react';
+import { Send, LogOut, ChevronRight, Edit2, HelpCircle, Shield, Globe, MessageSquarePlus, UserMinus, Save, X, Trash2, AlertTriangle } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
@@ -50,7 +50,7 @@ export default function ChildProfile() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const isDemo = profile?.email === 'caregiver@kikicare.com';
+  
 
   useEffect(() => {
     if (user) {
