@@ -349,6 +349,78 @@ export type Database = {
         }
         Relationships: []
       }
+      protocol_exercises: {
+        Row: {
+          created_at: string
+          exercise_id: string
+          id: string
+          protocol_id: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          exercise_id: string
+          id?: string
+          protocol_id: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          exercise_id?: string
+          id?: string
+          protocol_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "protocol_exercises_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "protocol_exercises_protocol_id_fkey"
+            columns: ["protocol_id"]
+            isOneToOne: false
+            referencedRelation: "protocols"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      protocols: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          frequency: string | null
+          id: string
+          is_community: boolean | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          frequency?: string | null
+          id?: string
+          is_community?: boolean | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          frequency?: string | null
+          id?: string
+          is_community?: boolean | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       saved_exercises: {
         Row: {
           created_at: string
