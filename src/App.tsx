@@ -27,6 +27,7 @@ import ConversationScreen from "./pages/kine/ConversationScreen";
 import KineProfile from "./pages/kine/KineProfile";
 import ExerciseLibraryScreen from "./pages/kine/ExerciseLibraryScreen";
 import CreateExerciseScreen from "./pages/kine/CreateExerciseScreen";
+import EditExerciseScreen from "./pages/kine/EditExerciseScreen";
 import CreateProtocolScreen from "./pages/kine/CreateProtocolScreen";
 
 import CuidadoraHome from "./pages/cuidadora/CuidadoraHome";
@@ -75,6 +76,7 @@ const App = () => (
               <Route path="/kine/profile" element={<ProtectedRoute allowedRole="kinesiologist"><KineProfile /></ProtectedRoute>} />
               <Route path="/kine/exercises" element={<ProtectedRoute allowedRole="kinesiologist"><ExerciseLibraryScreen /></ProtectedRoute>} />
               <Route path="/kine/exercises/create" element={<ProtectedRoute allowedRole="kinesiologist"><CreateExerciseScreen /></ProtectedRoute>} />
+              <Route path="/kine/exercises/edit/:id" element={<ProtectedRoute allowedRole="kinesiologist"><EditExerciseScreen /></ProtectedRoute>} />
               <Route path="/kine/protocols/create" element={<ProtectedRoute allowedRole="kinesiologist"><CreateProtocolScreen /></ProtectedRoute>} />
 
               {/* Cuidadora routes - protected, caregiver only */}
