@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Play, Clock, Target, Repeat } from 'lucide-react';
+import { ArrowLeft, Play, Clock, Repeat } from 'lucide-react';
 import { KikiCard } from '@/components/kiki/KikiComponents';
-import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
 interface ExerciseDetail {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Plus, Clock, X, Check } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { ChevronLeft, ChevronRight, Plus, Clock, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { KikiCard } from '@/components/kiki/KikiComponents';
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -31,13 +31,12 @@ const timeSlots = Array.from({ length: 24 }, (_, h) =>
 const durationOptions = [30, 45, 60, 90, 120];
 
 export default function AgendaScreen() {
-  const navigate = useNavigate();
   const { user } = useAuthContext();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<PatientOption[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
 
   // Create form
