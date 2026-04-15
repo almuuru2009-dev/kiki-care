@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, X, Star, Bookmark, Heart, Upload, Check, Info } from 'lucide-react';
+import { Plus, Search, X, Star, Heart, Edit, Trash2, Users, Play } from 'lucide-react';
 import { KikiCard } from '@/components/kiki/KikiComponents';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
@@ -41,6 +41,7 @@ interface CommunityExercise {
   author_city: string | null;
   instructions: string | null;
   description: string | null;
+  video_url: string | null;
 }
 
 interface MyExercise {
@@ -52,6 +53,22 @@ interface MyExercise {
   sets: number | null;
   reps: string | null;
   video_url: string | null;
+  is_community: boolean | null;
+}
+
+interface Protocol {
+  id: string;
+  name: string;
+  description: string | null;
+  frequency: string | null;
+  is_community: boolean | null;
+  exerciseCount: number;
+}
+
+interface PatientOption {
+  linkId: string;
+  childId: string;
+  childName: string;
 }
 
 function AdherenceBars({ percent }: { percent: number }) {
@@ -107,10 +124,16 @@ export default function ExerciseLibraryScreen() {
   const [search, setSearch] = useState('');
   const [communityExercises, setCommunityExercises] = useState<CommunityExercise[]>([]);
   const [myExercises, setMyExercises] = useState<MyExercise[]>([]);
+  const [protocols, setProtocols] = useState<Protocol[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [selectedExercise, setSelectedExercise] = useState<CommunityExercise | null>(null);
+  const [selectedMyEx, setSelectedMyEx] = useState<MyExercise | null>(null);
   const [loading, setLoading] = useState(true);
   const [evidenceFilter, setEvidenceFilter] = useState<string | null>(null);
+  // Assign to patient
+  const [showAssignModal, setShowAssignModal] = useState<string | null>(null); // exercise_id
+  const [patients, setPatients] = useState<PatientOption[]>([]);
+  const [assigningTo, setAssigningTo] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) loadData();
@@ -119,17 +142,46 @@ export default function ExerciseLibraryScreen() {
   const loadData = async () => {
     if (!user) return;
 
-    // Load community exercises
-    const { data: ce } = await supabase.from('community_exercises').select('*').order('rating', { ascending: false });
-    setCommunityExercises(ce || []);
+    const [ceRes, meRes, favRes, protoRes, linksRes] = await Promise.all([
+      supabase.from('community_exercises').select('*').order('rating', { ascending: false }),
+      supabase.from('exercises').select('*').eq('created_by', user.id),
+      supabase.from('saved_exercises').select('exercise_id').eq('user_id', user.id),
+      supabase.from('protocols').select('*').eq('created_by', user.id),
+      supabase.from('therapist_caregiver_links').select('id, child_id').eq('therapist_id', user.id).eq('status', 'active'),
+    ]);
 
-    // Load my exercises
-    const { data: me } = await supabase.from('exercises').select('*').eq('created_by', user.id).eq('is_community', false);
-    setMyExercises(me || []);
+    setCommunityExercises(ceRes.data || []);
+    setMyExercises(meRes.data || []);
+    setFavoriteIds(new Set((favRes.data || []).map(f => f.exercise_id)));
 
-    // Load favorites
-    const { data: favs } = await supabase.from('saved_exercises').select('exercise_id').eq('user_id', user.id);
-    setFavoriteIds(new Set((favs || []).map(f => f.exercise_id)));
+    // Load protocol exercise counts
+    const protos = protoRes.data || [];
+    if (protos.length > 0) {
+      const { data: peCounts } = await supabase
+        .from('protocol_exercises')
+        .select('protocol_id')
+        .in('protocol_id', protos.map(p => p.id));
+      const countMap = new Map<string, number>();
+      (peCounts || []).forEach(pe => countMap.set(pe.protocol_id, (countMap.get(pe.protocol_id) || 0) + 1));
+      setProtocols(protos.map(p => ({ ...p, exerciseCount: countMap.get(p.id) || 0 })));
+    } else {
+      setProtocols([]);
+    }
+
+    // Load patients for assignment
+    const links = linksRes.data || [];
+    if (links.length > 0) {
+      const childIds = links.map(l => l.child_id).filter(Boolean) as string[];
+      if (childIds.length > 0) {
+        const { data: children } = await supabase.from('children').select('id, name').in('id', childIds);
+        const childMap = new Map((children || []).map(c => [c.id, c.name]));
+        setPatients(links.filter(l => l.child_id).map(l => ({
+          linkId: l.id,
+          childId: l.child_id!,
+          childName: childMap.get(l.child_id!) || 'Paciente',
+        })));
+      }
+    }
 
     setLoading(false);
   };
@@ -148,6 +200,48 @@ export default function ExerciseLibraryScreen() {
     }
   };
 
+  const handleDeleteExercise = async (exId: string) => {
+    if (!confirm('¿Eliminar este ejercicio? Se quitará de todos los planes.')) return;
+    await supabase.from('treatment_plans').delete().eq('exercise_id', exId);
+    await supabase.from('protocol_exercises').delete().eq('exercise_id', exId);
+    await supabase.from('exercises').delete().eq('id', exId);
+    setMyExercises(prev => prev.filter(e => e.id !== exId));
+    setSelectedMyEx(null);
+    toast.success('Ejercicio eliminado');
+  };
+
+  const handleShareExercise = async (exId: string) => {
+    await supabase.from('exercises').update({ is_community: true }).eq('id', exId);
+    setMyExercises(prev => prev.map(e => e.id === exId ? { ...e, is_community: true } : e));
+    toast.success('Ejercicio compartido a la comunidad');
+  };
+
+  const handleAssignExercise = async (exerciseId: string, childId: string) => {
+    if (!user) return;
+    setAssigningTo(childId);
+    const { error } = await supabase.from('treatment_plans').insert({
+      child_id: childId,
+      therapist_id: user.id,
+      exercise_id: exerciseId,
+      day_of_week: [1, 2, 3, 4, 5],
+      active: true,
+    });
+    if (error) {
+      toast.error('Error al asignar');
+    } else {
+      toast.success('Ejercicio asignado al paciente');
+    }
+    setAssigningTo(null);
+    setShowAssignModal(null);
+  };
+
+  const handleDeleteProtocol = async (protoId: string) => {
+    if (!confirm('¿Eliminar este protocolo?')) return;
+    await supabase.from('protocols').delete().eq('id', protoId);
+    setProtocols(prev => prev.filter(p => p.id !== protoId));
+    toast.success('Protocolo eliminado');
+  };
+
   const filteredCommunity = communityExercises.filter(e => {
     if (search) {
       const q = search.toLowerCase();
@@ -158,7 +252,15 @@ export default function ExerciseLibraryScreen() {
     return true;
   });
 
+  const filteredMyExercises = myExercises.filter(e => {
+    if (!search) return true;
+    return e.name.toLowerCase().includes(search.toLowerCase()) || (e.target_area || '').toLowerCase().includes(search.toLowerCase());
+  });
+
   const favoriteExercises = communityExercises.filter(e => favoriteIds.has(e.id));
+
+  const communityCount = communityExercises.length;
+  const authorCount = new Set(communityExercises.map(e => e.author_name)).size;
 
   return (
     <AppShell>
@@ -169,7 +271,6 @@ export default function ExerciseLibraryScreen() {
         </button>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 px-4 pt-3 overflow-x-auto pb-1">
         {tabs.map((tab, i) => (
           <button key={tab} onClick={() => setActiveTab(i)}
@@ -180,10 +281,8 @@ export default function ExerciseLibraryScreen() {
         ))}
       </div>
 
-      {/* Tab description */}
       <p className="text-[10px] text-muted-foreground px-4 pt-1">{tabDescriptions[tabs[activeTab]]}</p>
 
-      {/* Search */}
       <div className="px-4 pt-2">
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -200,7 +299,7 @@ export default function ExerciseLibraryScreen() {
           <>
             {/* Mis ejercicios */}
             {activeTab === 0 && (
-              myExercises.length === 0 ? (
+              filteredMyExercises.length === 0 ? (
                 <div className="flex flex-col items-center py-12 text-center">
                   <p className="text-3xl mb-3">📝</p>
                   <h3 className="font-semibold">Todavía no creaste ejercicios propios</h3>
@@ -209,15 +308,18 @@ export default function ExerciseLibraryScreen() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {myExercises.map(ex => (
-                    <KikiCard key={ex.id}>
+                  {filteredMyExercises.map(ex => (
+                    <KikiCard key={ex.id} onClick={() => setSelectedMyEx(ex)} className="cursor-pointer">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-mint-50 flex items-center justify-center text-xl">🏋️</div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{ex.name}</p>
                           <p className="text-[10px] text-muted-foreground">{ex.target_area || 'General'} · {ex.duration || 5} min · {ex.sets || 3} series</p>
                         </div>
-                        {ex.video_url && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-mint-100 text-mint-700">📹 Video</span>}
+                        <div className="flex items-center gap-1.5">
+                          {ex.video_url && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-mint-100 text-mint-700">📹</span>}
+                          {ex.is_community && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-brand">🌐</span>}
+                        </div>
                       </div>
                     </KikiCard>
                   ))}
@@ -230,13 +332,12 @@ export default function ExerciseLibraryScreen() {
               <div className="space-y-3">
                 <KikiCard className="bg-gradient-to-r from-mint-50 to-blue-50">
                   <h3 className="text-sm font-semibold">Comunidad KikiCare</h3>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Ejercicios compartidos por terapeutas de toda Argentina. Podés guardarlos en favoritos o asignarlos a un paciente.</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Ejercicios compartidos por terapeutas de toda Argentina.</p>
                   <div className="flex gap-4 mt-2">
-                    <div className="text-center"><p className="font-bold text-sm">{communityExercises.length}</p><p className="text-[9px] text-muted-foreground">ejercicios</p></div>
-                    <div className="text-center"><p className="font-bold text-sm">8</p><p className="text-[9px] text-muted-foreground">terapeutas</p></div>
+                    <div className="text-center"><p className="font-bold text-sm">{communityCount}</p><p className="text-[9px] text-muted-foreground">ejercicios</p></div>
+                    <div className="text-center"><p className="font-bold text-sm">{authorCount}</p><p className="text-[9px] text-muted-foreground">terapeutas</p></div>
                   </div>
                 </KikiCard>
-                {/* Evidence filter */}
                 <div className="flex gap-1.5">
                   {['Guía clínica', 'Práctica común', 'Adaptación'].map(ev => (
                     <button key={ev} onClick={() => setEvidenceFilter(evidenceFilter === ev ? null : ev)}
@@ -265,11 +366,31 @@ export default function ExerciseLibraryScreen() {
                     <Plus size={12} className="inline mr-1" /> Nuevo protocolo
                   </button>
                 </div>
-                <div className="flex flex-col items-center py-8 text-center">
-                  <p className="text-3xl mb-3">📋</p>
-                  <h3 className="font-semibold">Sin protocolos aún</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Agrupá ejercicios en protocolos para asignarlos rápido</p>
-                </div>
+                {protocols.length === 0 ? (
+                  <div className="flex flex-col items-center py-8 text-center">
+                    <p className="text-3xl mb-3">📋</p>
+                    <h3 className="font-semibold">Sin protocolos aún</h3>
+                    <p className="text-sm text-muted-foreground mt-1">Agrupá ejercicios en protocolos para asignarlos rápido</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {protocols.map(proto => (
+                      <KikiCard key={proto.id} className="relative">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-xl">📋</div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{proto.name}</p>
+                            <p className="text-[10px] text-muted-foreground">{proto.exerciseCount} ejercicios · {proto.frequency || 'Sin frecuencia'}</p>
+                            {proto.description && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{proto.description}</p>}
+                          </div>
+                          <button onClick={() => handleDeleteProtocol(proto.id)} className="text-muted-foreground hover:text-rust p-1">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </KikiCard>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -294,7 +415,56 @@ export default function ExerciseLibraryScreen() {
         )}
       </div>
 
-      {/* Detail panel */}
+      {/* My exercise detail panel */}
+      {selectedMyEx && (
+        <AnimatePresence>
+          <motion.div className="fixed inset-0 bg-black/40 z-50" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedMyEx(null)} />
+          <motion.div className="fixed top-0 right-0 bottom-0 w-full max-w-[450px] bg-background z-50 overflow-y-auto shadow-2xl"
+            initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25 }}>
+            <div className="sticky top-0 bg-gradient-to-b from-mint-100 to-background p-4 pb-6">
+              <button onClick={() => setSelectedMyEx(null)} className="w-8 h-8 rounded-full bg-card/80 flex items-center justify-center mb-4" aria-label="Cerrar">
+                <X size={18} />
+              </button>
+              <h2 className="font-display text-xl text-foreground">{selectedMyEx.name}</h2>
+              <p className="text-xs text-muted-foreground mt-1">{selectedMyEx.target_area || 'General'} · {selectedMyEx.duration || 5} min · {selectedMyEx.sets || 3} series</p>
+            </div>
+            <div className="p-4 space-y-4">
+              {selectedMyEx.description && (
+                <KikiCard>
+                  <h3 className="text-sm font-semibold mb-1">Descripción</h3>
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{selectedMyEx.description}</p>
+                </KikiCard>
+              )}
+              {selectedMyEx.video_url && (
+                <KikiCard>
+                  <h3 className="text-sm font-semibold mb-2">Video</h3>
+                  <video src={selectedMyEx.video_url} controls className="w-full rounded-lg" />
+                </KikiCard>
+              )}
+            </div>
+            <div className="sticky bottom-0 p-4 bg-background border-t border-border space-y-2">
+              <button onClick={() => { setShowAssignModal(selectedMyEx.id); }} className="btn-primary w-full text-sm">
+                Asignar a paciente
+              </button>
+              <div className="flex gap-2">
+                <button onClick={() => navigate(`/kine/exercises/edit/${selectedMyEx.id}`)} className="btn-secondary flex-1 text-xs py-2">
+                  <Edit size={12} className="inline mr-1" /> Editar
+                </button>
+                {!selectedMyEx.is_community && (
+                  <button onClick={() => handleShareExercise(selectedMyEx.id)} className="btn-secondary flex-1 text-xs py-2">
+                    <Users size={12} className="inline mr-1" /> Compartir
+                  </button>
+                )}
+                <button onClick={() => handleDeleteExercise(selectedMyEx.id)} className="flex-1 text-xs py-2 rounded-[10px] bg-rust/10 text-rust font-medium">
+                  <Trash2 size={12} className="inline mr-1" /> Eliminar
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      )}
+
+      {/* Community exercise detail panel */}
       {selectedExercise && (
         <AnimatePresence>
           <motion.div className="fixed inset-0 bg-black/40 z-50" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedExercise(null)} />
@@ -321,12 +491,18 @@ export default function ExerciseLibraryScreen() {
                   <p className="text-xs text-muted-foreground">{selectedExercise.instructions}</p>
                 </KikiCard>
               )}
+              {selectedExercise.video_url && (
+                <KikiCard>
+                  <h3 className="text-sm font-semibold mb-2">Video</h3>
+                  <video src={selectedExercise.video_url} controls className="w-full rounded-lg" />
+                </KikiCard>
+              )}
               <div className="text-xs text-muted-foreground">
                 <p>Autor: {selectedExercise.author_name} {selectedExercise.author_city ? `· ${selectedExercise.author_city}` : ''}</p>
               </div>
             </div>
             <div className="sticky bottom-0 p-4 bg-background border-t border-border space-y-2">
-              <button className="btn-primary w-full text-sm">Agregar al plan de un paciente</button>
+              <button onClick={() => setShowAssignModal(selectedExercise.id)} className="btn-primary w-full text-sm">Agregar al plan de un paciente</button>
               <button onClick={() => toggleFavorite(selectedExercise.id)} className="btn-secondary w-full text-xs py-2">
                 <Heart size={12} className={`inline mr-1 ${favoriteIds.has(selectedExercise.id) ? 'fill-red-500 text-red-500' : ''}`} />
                 {favoriteIds.has(selectedExercise.id) ? 'Quitar de favoritos' : 'Agregar a favoritos'}
@@ -334,6 +510,31 @@ export default function ExerciseLibraryScreen() {
             </div>
           </motion.div>
         </AnimatePresence>
+      )}
+
+      {/* Assign to patient modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-foreground/40 flex items-center justify-center z-[60] px-6">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            className="bg-card rounded-xl p-6 w-full max-w-[320px] shadow-kiki-lg">
+            <h3 className="font-semibold text-center mb-4">Asignar a paciente</h3>
+            {patients.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center mb-4">No tenés pacientes vinculados.</p>
+            ) : (
+              <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
+                {patients.map(p => (
+                  <button key={p.childId} onClick={() => handleAssignExercise(showAssignModal, p.childId)}
+                    disabled={assigningTo === p.childId}
+                    className="w-full text-left px-3 py-2.5 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-sm font-medium disabled:opacity-50">
+                    {p.childName}
+                    {assigningTo === p.childId && <span className="text-xs text-muted-foreground ml-2">Asignando...</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setShowAssignModal(null)} className="btn-ghost w-full text-sm">Cancelar</button>
+          </motion.div>
+        </div>
       )}
     </AppShell>
   );
