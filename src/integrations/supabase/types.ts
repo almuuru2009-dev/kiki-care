@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      appointments: {
+        Row: {
+          appointment_date: string
+          child_id: string
+          created_at: string
+          description: string | null
+          duration_minutes: number
+          id: string
+          start_time: string
+          status: string
+          therapist_id: string
+          updated_at: string
+        }
+        Insert: {
+          appointment_date: string
+          child_id: string
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number
+          id?: string
+          start_time: string
+          status?: string
+          therapist_id: string
+          updated_at?: string
+        }
+        Update: {
+          appointment_date?: string
+          child_id?: string
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number
+          id?: string
+          start_time?: string
+          status?: string
+          therapist_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointments_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       children: {
         Row: {
           age: number | null

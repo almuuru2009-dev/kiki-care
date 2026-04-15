@@ -29,6 +29,7 @@ import ExerciseLibraryScreen from "./pages/kine/ExerciseLibraryScreen";
 import CreateExerciseScreen from "./pages/kine/CreateExerciseScreen";
 import EditExerciseScreen from "./pages/kine/EditExerciseScreen";
 import CreateProtocolScreen from "./pages/kine/CreateProtocolScreen";
+import AgendaScreen from "./pages/kine/AgendaScreen";
 
 import CuidadoraHome from "./pages/cuidadora/CuidadoraHome";
 import SessionPlayer from "./pages/cuidadora/SessionPlayer";
@@ -36,6 +37,7 @@ import ProgressScreen from "./pages/cuidadora/ProgressScreen";
 import CuidadoraMessages from "./pages/cuidadora/CuidadoraMessages";
 import ChildProfile from "./pages/cuidadora/ChildProfile";
 import MedalsScreen from "./pages/cuidadora/MedalsScreen";
+import ExerciseDetailScreen from "./pages/cuidadora/ExerciseDetailScreen";
 
 import OnboardingScreen from "./pages/OnboardingScreen";
 import NotFound from "./pages/NotFound";
@@ -78,6 +80,7 @@ const App = () => (
               <Route path="/kine/exercises/create" element={<ProtectedRoute allowedRole="kinesiologist"><CreateExerciseScreen /></ProtectedRoute>} />
               <Route path="/kine/exercises/edit/:id" element={<ProtectedRoute allowedRole="kinesiologist"><EditExerciseScreen /></ProtectedRoute>} />
               <Route path="/kine/protocols/create" element={<ProtectedRoute allowedRole="kinesiologist"><CreateProtocolScreen /></ProtectedRoute>} />
+              <Route path="/kine/agenda" element={<ProtectedRoute allowedRole="kinesiologist"><AgendaScreen /></ProtectedRoute>} />
 
               {/* Cuidadora routes - protected, caregiver only */}
               <Route path="/cuidadora/home" element={<ProtectedRoute allowedRole="caregiver"><CuidadoraHome /></ProtectedRoute>} />
@@ -87,6 +90,7 @@ const App = () => (
               <Route path="/cuidadora/messages/:id" element={<ProtectedRoute allowedRole="caregiver"><ConversationScreen /></ProtectedRoute>} />
               <Route path="/cuidadora/child" element={<ProtectedRoute allowedRole="caregiver"><ChildProfile /></ProtectedRoute>} />
               <Route path="/cuidadora/medals" element={<ProtectedRoute allowedRole="caregiver"><MedalsScreen /></ProtectedRoute>} />
+              <Route path="/cuidadora/exercise/:id" element={<ProtectedRoute allowedRole="caregiver"><ExerciseDetailScreen /></ProtectedRoute>} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>
