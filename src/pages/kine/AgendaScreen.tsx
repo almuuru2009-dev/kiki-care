@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Plus, Clock, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
