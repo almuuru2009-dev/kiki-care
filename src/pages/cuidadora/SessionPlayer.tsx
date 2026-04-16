@@ -322,6 +322,25 @@ export default function SessionPlayer() {
         </button>
       </div>
 
+      {/* Medal celebration popup */}
+      {showMedalPopup && earnedMedal && (
+        <div className="fixed inset-0 bg-foreground/60 flex items-center justify-center z-50 px-6">
+          <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+            className="bg-card rounded-2xl p-8 w-full max-w-[320px] shadow-kiki-lg text-center">
+            <motion.div className="text-6xl mb-4" animate={{ rotate: [0, -15, 15, -10, 10, 0], scale: [1, 1.2, 1] }}
+              transition={{ duration: 0.8, delay: 0.3 }}>
+              {earnedMedal.icon}
+            </motion.div>
+            <h3 className="text-lg font-bold mb-1">¡Nueva medalla!</h3>
+            <p className="text-base font-semibold text-mint-600 mb-2">{earnedMedal.title}</p>
+            <p className="text-sm text-muted-foreground mb-6">¡Seguí así, lo estás haciendo genial!</p>
+            <button onClick={() => navigate('/cuidadora/home')} className="btn-primary w-full text-sm">Continuar</button>
+            <button onClick={() => navigate('/cuidadora/medals')} className="text-sm text-mint-500 font-medium mt-3 block mx-auto">Ver medallas</button>
+          </motion.div>
+        </div>
+      )}
+
       {showConfirmExit && (
         <div className="fixed inset-0 bg-foreground/40 flex items-center justify-center z-50 px-6">
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
