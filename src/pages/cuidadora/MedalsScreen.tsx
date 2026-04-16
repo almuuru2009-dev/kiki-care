@@ -7,7 +7,6 @@ import { KikiCard } from '@/components/kiki/KikiComponents';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
-// Static medal definitions - earned status computed from user data
 const medalDefs = [
   { id: 'first-session', icon: '⭐', title: 'Primera sesión', description: 'Completá tu primera sesión de ejercicios', requirement: 'Completar 1 sesión', threshold: 1 },
   { id: 'streak-3', icon: '🔥', title: 'Racha de 3', description: 'Completá 3 sesiones seguidas', requirement: '3 sesiones consecutivas', threshold: 3 },
@@ -16,10 +15,18 @@ const medalDefs = [
   { id: 'twenty-sessions', icon: '🏆', title: 'Campeón', description: 'Completá 20 sesiones en total', requirement: 'Completar 20 sesiones', threshold: 20 },
 ];
 
+interface EarnedMedal {
+  medal_type: string;
+  earned_at: string;
+  points_awarded: number;
+}
+
 export default function MedalsScreen() {
   const { user } = useAuthContext();
   const [sessionCount, setSessionCount] = useState(0);
+  const [earnedMedals, setEarnedMedals] = useState<EarnedMedal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedMedal, setSelectedMedal] = useState<typeof medalDefs[0] & { earned: boolean; earnedAt?: string; points?: number } | null>(null);
 
   useEffect(() => {
     if (user) loadData();
@@ -27,19 +34,27 @@ export default function MedalsScreen() {
 
   const loadData = async () => {
     if (!user) return;
-    const { count } = await supabase
-      .from('sessions')
-      .select('*', { count: 'exact', head: true })
-      .eq('caregiver_id', user.id);
-    setSessionCount(count || 0);
+    const [sessRes, medalsRes] = await Promise.all([
+      supabase.from('sessions').select('*', { count: 'exact', head: true }).eq('caregiver_id', user.id),
+      supabase.from('medals').select('medal_type, earned_at, points_awarded').eq('user_id', user.id),
+    ]);
+    setSessionCount(sessRes.count || 0);
+    setEarnedMedals((medalsRes.data || []) as EarnedMedal[]);
     setLoading(false);
   };
 
-  const medals = medalDefs.map(m => ({
-    ...m,
-    earned: sessionCount >= m.threshold,
-    progress: Math.min(100, Math.round((sessionCount / m.threshold) * 100)),
-  }));
+  const earnedTypes = new Set(earnedMedals.map(m => m.medal_type));
+
+  const medals = medalDefs.map(m => {
+    const earnedRecord = earnedMedals.find(e => e.medal_type === m.id);
+    return {
+      ...m,
+      earned: earnedTypes.has(m.id),
+      earnedAt: earnedRecord?.earned_at,
+      points: earnedRecord?.points_awarded,
+      progress: Math.min(100, Math.round((sessionCount / m.threshold) * 100)),
+    };
+  });
 
   const earnedCount = medals.filter(m => m.earned).length;
   const earned = medals.filter(m => m.earned);
@@ -79,9 +94,11 @@ export default function MedalsScreen() {
                 <div className="grid grid-cols-3 gap-3">
                   {earned.map((medal, i) => (
                     <motion.div key={medal.id} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}>
-                      <div className="rounded-2xl p-3 text-center bg-gradient-to-br from-mint-300 to-mint-100 shadow-md">
+                      <div className="rounded-2xl p-3 text-center bg-gradient-to-br from-mint-300 to-mint-100 shadow-md cursor-pointer active:scale-95 transition-transform"
+                        onClick={() => setSelectedMedal(medal)}>
                         <div className="text-3xl mb-1">{medal.icon}</div>
                         <p className="text-[10px] font-bold text-navy leading-tight">{medal.title}</p>
+                        {medal.points && <p className="text-[9px] text-navy/60 mt-0.5">+{medal.points} pts</p>}
                       </div>
                     </motion.div>
                   ))}
@@ -121,6 +138,27 @@ export default function MedalsScreen() {
           </>
         )}
       </div>
+
+      {/* Medal detail popup */}
+      {selectedMedal && (
+        <div className="fixed inset-0 bg-foreground/40 z-50 flex items-center justify-center px-6" onClick={() => setSelectedMedal(null)}>
+          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            className="bg-card rounded-2xl p-6 w-full max-w-[320px] shadow-kiki-lg text-center" onClick={e => e.stopPropagation()}>
+            <div className="text-5xl mb-3">{selectedMedal.icon}</div>
+            <h3 className="text-lg font-bold">{selectedMedal.title}</h3>
+            <p className="text-sm text-muted-foreground mt-1">{selectedMedal.description}</p>
+            {selectedMedal.earned && selectedMedal.earnedAt && (
+              <p className="text-xs text-mint-600 mt-2 font-medium">
+                Obtenida el {new Date(selectedMedal.earnedAt).toLocaleDateString('es-AR')}
+              </p>
+            )}
+            {selectedMedal.points && (
+              <p className="text-xs text-muted-foreground mt-1">+{selectedMedal.points} puntos</p>
+            )}
+            <button onClick={() => setSelectedMedal(null)} className="btn-primary w-full text-sm mt-4">Cerrar</button>
+          </motion.div>
+        </div>
+      )}
     </AppShell>
   );
 }

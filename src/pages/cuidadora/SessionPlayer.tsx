@@ -104,6 +104,9 @@ export default function SessionPlayer() {
     }
   };
 
+  const [showMedalPopup, setShowMedalPopup] = useState(false);
+  const [earnedMedal, setEarnedMedal] = useState<{ icon: string; title: string } | null>(null);
+
   const handleSubmit = async () => {
     if (difficulty === null || !childId || !user) return;
 
@@ -116,7 +119,72 @@ export default function SessionPlayer() {
       note: note || null,
     });
 
-    navigate('/cuidadora/home');
+    // Check and award medals
+    const { count: sessionCount } = await supabase
+      .from('sessions')
+      .select('*', { count: 'exact', head: true })
+      .eq('caregiver_id', user.id);
+
+    const total = sessionCount || 0;
+    const year = new Date().getFullYear();
+
+    const medalChecks = [
+      { type: 'first-session', threshold: 1, icon: '⭐', title: 'Primera sesión', points: 10 },
+      { type: 'streak-3', threshold: 3, icon: '🔥', title: 'Racha de 3', points: 15 },
+      { type: 'streak-7', threshold: 7, icon: '💪', title: 'Semana completa', points: 25 },
+      { type: 'ten-sessions', threshold: 10, icon: '🏅', title: '10 sesiones', points: 30 },
+      { type: 'twenty-sessions', threshold: 20, icon: '🏆', title: 'Campeón', points: 50 },
+    ];
+
+    const { data: existingMedals } = await supabase
+      .from('medals')
+      .select('medal_type')
+      .eq('user_id', user.id);
+
+    const existingTypes = new Set((existingMedals || []).map(m => m.medal_type));
+    let newMedal: { icon: string; title: string } | null = null;
+
+    for (const check of medalChecks) {
+      if (total >= check.threshold && !existingTypes.has(check.type)) {
+        await supabase.from('medals').insert({
+          user_id: user.id,
+          medal_type: check.type,
+          title: check.title,
+          description: `Completaste ${check.threshold} sesión(es)`,
+          points_awarded: check.points,
+          year,
+        });
+        newMedal = { icon: check.icon, title: check.title };
+      }
+    }
+
+    // Update user_points
+    const month = new Date().getMonth() + 1;
+    const { data: existingPoints } = await supabase
+      .from('user_points')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('month', month)
+      .eq('year', year)
+      .single();
+
+    if (existingPoints) {
+      await supabase.from('user_points').update({
+        sessions_completed: (existingPoints.sessions_completed || 0) + 1,
+        points: (existingPoints.points || 0) + 3,
+      }).eq('id', existingPoints.id);
+    } else {
+      await supabase.from('user_points').insert({
+        user_id: user.id, month, year, sessions_completed: 1, points: 3,
+      });
+    }
+
+    if (newMedal) {
+      setEarnedMedal(newMedal);
+      setShowMedalPopup(true);
+    } else {
+      navigate('/cuidadora/home');
+    }
   };
 
   if (loading) {
@@ -253,6 +321,25 @@ export default function SessionPlayer() {
           Siguiente <ChevronRight size={18} />
         </button>
       </div>
+
+      {/* Medal celebration popup */}
+      {showMedalPopup && earnedMedal && (
+        <div className="fixed inset-0 bg-foreground/60 flex items-center justify-center z-50 px-6">
+          <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+            className="bg-card rounded-2xl p-8 w-full max-w-[320px] shadow-kiki-lg text-center">
+            <motion.div className="text-6xl mb-4" animate={{ rotate: [0, -15, 15, -10, 10, 0], scale: [1, 1.2, 1] }}
+              transition={{ duration: 0.8, delay: 0.3 }}>
+              {earnedMedal.icon}
+            </motion.div>
+            <h3 className="text-lg font-bold mb-1">¡Nueva medalla!</h3>
+            <p className="text-base font-semibold text-mint-600 mb-2">{earnedMedal.title}</p>
+            <p className="text-sm text-muted-foreground mb-6">¡Seguí así, lo estás haciendo genial!</p>
+            <button onClick={() => navigate('/cuidadora/home')} className="btn-primary w-full text-sm">Continuar</button>
+            <button onClick={() => navigate('/cuidadora/medals')} className="text-sm text-mint-500 font-medium mt-3 block mx-auto">Ver medallas</button>
+          </motion.div>
+        </div>
+      )}
 
       {showConfirmExit && (
         <div className="fixed inset-0 bg-foreground/40 flex items-center justify-center z-50 px-6">

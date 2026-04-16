@@ -308,11 +308,20 @@ export default function KineProfile() {
           </button>
         </motion.div>
 
-        {/* Delete account */}
+        {/* Delete account - hide for demo */}
+        {profile?.email && !profile.email.includes('kikiapp.com') && !profile.email.includes('demo.kikicare.com') && (
+          <motion.div variants={stagger.item}>
+            <button onClick={() => setShowDeleteConfirm(true)} className="w-full text-center py-2 text-sm text-muted-foreground/60">
+              <Trash2 size={12} className="inline mr-1" /> Eliminar cuenta
+            </button>
+          </motion.div>
+        )}
+
+        {/* Support */}
         <motion.div variants={stagger.item}>
-          <button onClick={() => setShowDeleteConfirm(true)} className="w-full text-center py-2 text-sm text-muted-foreground/60">
-            <Trash2 size={12} className="inline mr-1" /> Eliminar cuenta
-          </button>
+          <a href="mailto:soporte.kikicare@gmail.com" className="w-full text-center py-2 text-sm text-muted-foreground font-medium block">
+            📧 Contactar soporte
+          </a>
         </motion.div>
       </motion.div>
 
