@@ -22,7 +22,6 @@ Deno.serve(async (req) => {
     const results: string[] = [];
 
     if (step === "users") {
-      // Create demo users
       const { data: allUsers } = await admin.auth.admin.listUsers();
 
       // KINE
@@ -77,6 +76,7 @@ Deno.serve(async (req) => {
       // Create child + link
       const { data: mainChild } = await admin.from("children").insert({
         caregiver_id: careId, name: "Tomás García", age: 6, diagnosis: "PCI espástica bilateral", gmfcs: 2,
+        notes: "Le gusta jugar con dinosaurios. Responde bien a juegos con música. Mejor rendimiento por la mañana.",
       }).select("id").single();
 
       if (mainChild) {
@@ -85,29 +85,30 @@ Deno.serve(async (req) => {
           child_id: mainChild.id, status: "active", responded_at: new Date().toISOString(),
         }).select("id").single();
 
-        // Exercises
-        const exerciseNames = [
-          { name: "Estiramiento de isquiotibiales", target_area: "Piernas", duration: 5 },
-          { name: "Fortalecimiento de core", target_area: "Tronco", duration: 8 },
-          { name: "Equilibrio en bipedestación", target_area: "Global", duration: 10 },
+        // Exercises with richer data
+        const exerciseDefs = [
+          { name: "Estiramiento de isquiotibiales", target_area: "Piernas", duration: 5, description: "Posición inicial: Sentado con piernas extendidas.\n\nInstrucciones: Alcanzar los dedos de los pies con las manos, manteniendo la espalda recta. Mantener 15 segundos.\n\nPrecauciones: No forzar si hay dolor. Respetar el rango de movimiento del niño." },
+          { name: "Fortalecimiento de core", target_area: "Tronco", duration: 8, description: "Posición inicial: Acostado boca arriba con rodillas flexionadas.\n\nInstrucciones: Elevar cabeza y hombros suavemente. Mantener 5 segundos. Repetir.\n\nProgresión: Agregar rotaciones suaves cuando domine el movimiento básico." },
+          { name: "Equilibrio en bipedestación", target_area: "Global", duration: 10, description: "Posición inicial: De pie con apoyo en una silla o barra.\n\nInstrucciones: Soltar el apoyo gradualmente. Intentar mantener 10 segundos sin apoyo.\n\nVariante: Pararse en un pie alternando. Usar superficie inestable para mayor desafío." },
+          { name: "Movilidad de tobillo", target_area: "Piernas", duration: 5, description: "Posición inicial: Sentado con pies en el suelo.\n\nInstrucciones: Mover los tobillos en círculos, 10 veces en cada dirección. Luego flexión y extensión.\n\nObjetivo: Mejorar rango articular y propiocepción." },
         ];
         const exIds: string[] = [];
-        for (const ex of exerciseNames) {
+        for (const ex of exerciseDefs) {
           const { data } = await admin.from("exercises").insert({
             ...ex, created_by: kineId, sets: 3, reps: "10 repeticiones",
           }).select("id").single();
           if (data) exIds.push(data.id);
         }
 
-        // Treatment plans
-        for (const exId of exIds) {
+        // Treatment plans with day_of_week
+        for (let i = 0; i < exIds.length; i++) {
           await admin.from("treatment_plans").insert({
-            child_id: mainChild.id, therapist_id: kineId, exercise_id: exId,
+            child_id: mainChild.id, therapist_id: kineId, exercise_id: exIds[i],
             day_of_week: [1, 2, 3, 4, 5], active: true,
           });
         }
 
-        // Sessions
+        // Sessions (15 over past 30 days)
         for (let i = 0; i < 15; i++) {
           const d = new Date();
           d.setDate(d.getDate() - i * 2);
@@ -124,24 +125,41 @@ Deno.serve(async (req) => {
         if (link) {
           const msgs = [
             { sender_id: kineId, receiver_id: careId, content: "Hola María, ¿cómo va Tomás con los ejercicios?", link_id: link.id },
-            { sender_id: careId, receiver_id: kineId, content: "¡Hola Dr. Pérez! Va muy bien.", link_id: link.id },
-            { sender_id: kineId, receiver_id: careId, content: "Excelente, seguí así!", link_id: link.id },
+            { sender_id: careId, receiver_id: kineId, content: "¡Hola Dr. Pérez! Va muy bien, le gustan los de equilibrio.", link_id: link.id },
+            { sender_id: kineId, receiver_id: careId, content: "Excelente, le agregué un ejercicio nuevo de movilidad de tobillo.", link_id: link.id },
+            { sender_id: careId, receiver_id: kineId, content: "Perfecto, lo probamos mañana. ¡Gracias!", link_id: link.id },
           ];
           for (const m of msgs) {
             await admin.from("messages").insert({ ...m, read: true });
           }
         }
 
-        // Medals + Points
+        // Medals (only first-session, rest to be earned)
         const yr = new Date().getFullYear();
         await admin.from("medals").insert([
-          { user_id: careId, medal_type: "first-session", title: "Primera sesión", points_awarded: 10, year: yr },
-          { user_id: careId, medal_type: "streak-7", title: "Semana completa", points_awarded: 25, year: yr },
+          { user_id: careId, medal_type: "first-session", title: "Primera sesión", description: "Completaste tu primera sesión", points_awarded: 10, year: yr },
+          { user_id: careId, medal_type: "streak-3", title: "Racha de 3", description: "Completaste 3 sesiones", points_awarded: 15, year: yr },
+          { user_id: careId, medal_type: "streak-7", title: "Semana completa", description: "Completaste 7 sesiones", points_awarded: 25, year: yr },
+          { user_id: careId, medal_type: "ten-sessions", title: "10 sesiones", description: "Completaste 10 sesiones", points_awarded: 30, year: yr },
         ]);
         const mo = new Date().getMonth() + 1;
         await admin.from("user_points").insert({
-          user_id: careId, month: mo, year: yr, sessions_completed: 8, sessions_required: 10, points: 24,
+          user_id: careId, month: mo, year: yr, sessions_completed: 15, sessions_required: 20, points: 80,
         });
+
+        // Appointments (upcoming)
+        const today = new Date();
+        for (let i = 0; i < 4; i++) {
+          const apptDate = new Date(today);
+          apptDate.setDate(apptDate.getDate() + 3 + i * 7);
+          const descriptions = ["Control mensual", "Revisión de plan", "Evaluación de progreso", "Seguimiento"];
+          await admin.from("appointments").insert({
+            therapist_id: kineId, child_id: mainChild.id,
+            appointment_date: apptDate.toISOString().split("T")[0],
+            start_time: "10:00", duration_minutes: 45,
+            description: descriptions[i] || "Consulta",
+          });
+        }
       }
 
       // Extra caregivers for kine
@@ -171,7 +189,6 @@ Deno.serve(async (req) => {
             therapist_id: kineId, caregiver_id: ecId, caregiver_email: ec.email,
             child_id: ch.id, status: "active", responded_at: new Date().toISOString(),
           });
-          // A few sessions
           for (let i = 0; i < 5; i++) {
             const d = new Date(); d.setDate(d.getDate() - i * 3);
             await admin.from("sessions").insert({
@@ -201,7 +218,8 @@ Deno.serve(async (req) => {
       await admin.from("notifications").insert([
         { user_id: kineId, title: "Nuevo paciente vinculado", body: "María García aceptó la invitación.", type: "link", read: true },
         { user_id: kineId, title: "Sesión completada", body: "Tomás García completó su sesión de hoy.", type: "session", read: false },
-        { user_id: careId, title: "¡Medalla desbloqueada!", body: "Ganaste la medalla 'Semana completa'.", type: "medal", read: false },
+        { user_id: careId, title: "¡Medalla desbloqueada!", body: "Ganaste la medalla '10 sesiones'.", type: "medal", read: false },
+        { user_id: careId, title: "Nueva consulta agendada", body: "Dr. Pérez agendó una consulta para el próximo martes.", type: "appointment", read: false },
       ]);
 
       // Settings
