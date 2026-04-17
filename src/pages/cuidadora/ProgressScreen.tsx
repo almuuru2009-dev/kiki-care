@@ -5,166 +5,77 @@ import { AppShell } from '@/components/layout/AppShell';
 import { KikiCard } from '@/components/kiki/KikiComponents';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Flame, ChevronRight, Trophy, HelpCircle, Calendar as CalendarIcon, PlayCircle } from 'lucide-react';
+import { Flame, ChevronRight, Trophy, HelpCircle, Calendar as CalendarIcon } from 'lucide-react';
 
-interface SessionData {
-  id: string;
-  completed_at: string;
-  difficulty: number | null;
-  child_mood: number | null;
-}
-
-interface MedalData {
-  id: string;
-  medal_type: string;
-  title: string;
-  description: string | null;
-  points_awarded: number;
-  earned_at: string;
-}
+interface SessionData { id: string; completed_at: string; }
 
 const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-
-// Three-tier medal system
-const medalDefs = [
-  // Inicio (quick wins)
-  { type: 'first-session', icon: '⭐', title: 'Primera sesión', desc: 'Completá tu primera sesión', threshold: 1, tier: 'inicio' },
-  { type: 'streak-3', icon: '🔥', title: 'Racha de 3', desc: '3 días seguidos', threshold: 3, tier: 'inicio' },
-  { type: 'five-sessions', icon: '🎯', title: '5 sesiones', desc: 'Completá 5 sesiones', threshold: 5, tier: 'inicio' },
-  // Progreso mensual
-  { type: 'ten-sessions', icon: '🏅', title: '10 sesiones', desc: 'Completá 10 sesiones', threshold: 10, tier: 'mensual' },
-  { type: 'streak-7', icon: '💪', title: 'Semana completa', desc: '7 días seguidos', threshold: 7, tier: 'mensual' },
-  { type: 'twenty-sessions', icon: '🏆', title: 'Campeón', desc: '20 sesiones', threshold: 20, tier: 'mensual' },
-  { type: 'month-perfect', icon: '🌟', title: 'Mes perfecto', desc: 'Todas las sesiones del mes', threshold: 10, tier: 'mensual' },
-  // Logros anuales
-  { type: 'fifty-sessions', icon: '👑', title: 'Leyenda', desc: '50 sesiones', threshold: 50, tier: 'anual' },
-  { type: 'hundred-sessions', icon: '💎', title: 'Centenario', desc: '100 sesiones', threshold: 100, tier: 'anual' },
-  { type: 'year-consistent', icon: '🏛️', title: 'Constancia anual', desc: 'Al menos 1 sesión cada mes durante 12 meses', threshold: 12, tier: 'anual' },
-];
 
 export default function ProgressScreen() {
   const navigate = useNavigate();
   const { user } = useAuthContext();
   const [sessions, setSessions] = useState<SessionData[]>([]);
-  const [, setChildName] = useState('Mi niño');
-  const [loading, setLoading] = useState(true);
-  const [medals, setMedals] = useState<MedalData[]>([]);
+  const [childName, setChildName] = useState('');
   const [totalPoints, setTotalPoints] = useState(0);
-  const [showPointsInfo, setShowPointsInfo] = useState(false);
-  const [showMedals, setShowMedals] = useState(false);
+  const [medalsCount, setMedalsCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [showPoints, setShowPoints] = useState(false);
 
-  useEffect(() => {
-    if (user) loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  useEffect(() => { if (user) load(); }, [user]);
 
-  const loadData = async () => {
+  const load = async () => {
     if (!user) return;
-
-    const { data: children } = await supabase
-      .from('children').select('name').eq('caregiver_id', user.id).limit(1);
-    if (children && children.length > 0) setChildName(children[0].name);
-
-    const { data } = await supabase
-      .from('sessions').select('id, completed_at, difficulty, child_mood')
-      .eq('caregiver_id', user.id).order('completed_at', { ascending: false });
-    setSessions(data || []);
-
-    const { data: pts } = await supabase
-      .from('user_points').select('*').eq('user_id', user.id);
-    setTotalPoints((pts || []).reduce((s, p) => s + p.points, 0));
-
-    const { data: meds } = await supabase
-      .from('medals').select('*').eq('user_id', user.id);
-    setMedals(meds || []);
-
-    const sessionCount = (data || []).length;
-    await checkAndAwardMedals(sessionCount, meds || []);
-
+    const [childRes, sessRes, ptsRes, medRes] = await Promise.all([
+      supabase.from('children').select('name').eq('caregiver_id', user.id).limit(1),
+      supabase.from('sessions').select('id, completed_at').eq('caregiver_id', user.id).order('completed_at', { ascending: false }),
+      supabase.from('user_points').select('points').eq('user_id', user.id),
+      supabase.from('medals').select('medal_type', { count: 'exact', head: true }).eq('user_id', user.id),
+    ]);
+    if (childRes.data?.[0]) setChildName(childRes.data[0].name);
+    setSessions(sessRes.data || []);
+    setTotalPoints((ptsRes.data || []).reduce((s, p) => s + (p.points || 0), 0));
+    setMedalsCount(medRes.count || 0);
     setLoading(false);
-  };
-
-  const checkAndAwardMedals = async (count: number, existing: MedalData[]) => {
-    if (!user) return;
-    const year = new Date().getFullYear();
-    const earnedTypes = new Set(existing.map(m => m.medal_type));
-    for (const def of medalDefs) {
-      if (def.type === 'month-perfect' || def.type === 'year-consistent') continue;
-      if (count >= def.threshold && !earnedTypes.has(def.type)) {
-        const points = def.tier === 'inicio' ? 10 : def.tier === 'mensual' ? 25 : 50;
-        const { data: newMedal } = await supabase.from('medals').insert({
-          user_id: user.id, medal_type: def.type, title: def.title,
-          description: def.desc, points_awarded: points, year,
-        }).select().single();
-        if (newMedal) {
-          setMedals(prev => [...prev, newMedal]);
-          setTotalPoints(prev => prev + points);
-        }
-      }
-    }
   };
 
   const now = new Date();
   const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
+  const currentMonth = now.getMonth();
   const today = now.getDate();
-  const monthlyGoal = 10;
 
   const thisMonthSessions = useMemo(() =>
     sessions.filter(s => {
       const d = new Date(s.completed_at);
-      return d.getFullYear() === currentYear && d.getMonth() + 1 === currentMonth;
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
     }), [sessions, currentYear, currentMonth]);
 
-  const monthlyProgress = Math.min(100, Math.round((thisMonthSessions.length / monthlyGoal) * 100));
-
-  // Streak calculation
   const streak = useMemo(() => {
     const dates = [...new Set(sessions.map(s => new Date(s.completed_at).toISOString().split('T')[0]))].sort().reverse();
     if (dates.length === 0) return 0;
     let count = 0;
-    const todayStr = now.toISOString().split('T')[0];
-    let checkDate = todayStr;
+    const cursor = new Date(now);
+    cursor.setHours(0, 0, 0, 0);
+    let key = cursor.toISOString().split('T')[0];
+    if (!dates.includes(key)) { cursor.setDate(cursor.getDate() - 1); key = cursor.toISOString().split('T')[0]; }
     for (const d of dates) {
-      if (d === checkDate) {
-        count++;
-        const prev = new Date(checkDate);
-        prev.setDate(prev.getDate() - 1);
-        checkDate = prev.toISOString().split('T')[0];
-      } else if (d < checkDate) break;
+      if (d === key) { count++; cursor.setDate(cursor.getDate() - 1); key = cursor.toISOString().split('T')[0]; }
+      else if (d < key) break;
     }
     return count;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessions]);
 
-  // Week sessions
   const weekStart = new Date(now);
   weekStart.setDate(now.getDate() - now.getDay());
   weekStart.setHours(0, 0, 0, 0);
   const thisWeekSessions = sessions.filter(s => new Date(s.completed_at) >= weekStart).length;
 
-  // Calendar
-  const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-  const sessionDatesThisMonth = new Set(
-    thisMonthSessions.map(s => new Date(s.completed_at).getDate())
-  );
-  const todayHasSession = sessionDatesThisMonth.has(today);
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const sessionDays = new Set(thisMonthSessions.map(s => new Date(s.completed_at).getDate()));
 
-  // Greeting
-  const hour = now.getHours();
-  const greetEmoji = hour < 12 ? '☀️' : hour < 18 ? '🌤' : '🌙';
-  const greetText = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches';
-
-  // Next medal to earn
-  const earnedTypes = new Set(medals.map(m => m.medal_type));
-  const nextMedal = medalDefs.find(d => !earnedTypes.has(d.type));
-
-  // Streak reward message
-  const streakMessage = streak === 0
-    ? 'Empezá tu racha hoy'
-    : streak < 3
-    ? `${streak} día${streak > 1 ? 's' : ''} seguido${streak > 1 ? 's' : ''} — ¡seguí así!`
-    : `🔥 ${streak} días seguidos — ¡increíble!`;
+  // Adherencia para sorteo
+  const expectedThisMonth = Math.max(1, Math.round((today / 7) * 5));
+  const adherencePct = Math.min(100, Math.round((thisMonthSessions.length / expectedThisMonth) * 100));
 
   return (
     <AppShell>
@@ -175,189 +86,162 @@ export default function ProgressScreen() {
           </div>
         ) : (
           <>
-            {/* Header contextual */}
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="pt-2">
-              <p className="text-sm text-muted-foreground">{greetEmoji} {greetText}</p>
-              <h1 className="text-xl font-bold text-foreground mt-1">
-                {todayHasSession ? '¡Hoy ya completaste tu sesión! 🎉' : 'Hoy te toca tu sesión'}
-              </h1>
+            {/* Header */}
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="pt-4">
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{MONTHS_ES[currentMonth]} {currentYear}</p>
+              <h1 className="text-xl font-bold text-foreground mt-1">Progreso de {childName || 'tu niño'}</h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {thisMonthSessions.length} {thisMonthSessions.length === 1 ? 'sesión completada' : 'sesiones completadas'} este mes
+              </p>
             </motion.div>
 
-            {/* Main CTA */}
-            {!todayHasSession && (
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.05 }}>
-                <button
-                  onClick={() => navigate('/cuidadora/session')}
-                  className="w-full py-5 rounded-2xl bg-gradient-to-r from-mint to-mint-600 text-navy font-bold text-lg flex items-center justify-center gap-3 shadow-lg active:scale-[0.98] transition-transform"
-                >
-                  <PlayCircle size={28} />
-                  Completar sesión
-                </button>
-              </motion.div>
-            )}
-
-            {/* Dynamic feedback */}
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-              <div className="flex items-center gap-3 px-1">
-                <div className="flex items-center gap-1.5">
-                  <Flame size={16} className={streak > 0 ? 'text-orange-500' : 'text-muted-foreground'} />
-                  <span className="text-sm font-medium">{streakMessage}</span>
-                </div>
-              </div>
-              {nextMedal && !todayHasSession && (
-                <p className="text-xs text-muted-foreground mt-1 px-1">
-                  Completá hoy y avanzá hacia la medalla "{nextMedal.title}" {nextMedal.icon}
-                </p>
-              )}
-            </motion.div>
-
-            {/* Three key indicators */}
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-              <div className="grid grid-cols-3 gap-2">
-                <KikiCard className="text-center !p-3">
-                  <div className="w-full h-2 rounded-full bg-muted mb-2">
-                    <div className={`h-2 rounded-full transition-all ${monthlyProgress >= 100 ? 'bg-mint' : monthlyProgress >= 50 ? 'bg-amber-400' : 'bg-rust/60'}`}
-                      style={{ width: `${monthlyProgress}%` }} />
+            {/* 3 stats — incluye racha como tarjeta interactiva */}
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+              className="grid grid-cols-3 gap-2">
+              <KikiCard className="text-center !p-3">
+                <p className="text-2xl font-bold text-foreground">{thisMonthSessions.length}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Este mes</p>
+              </KikiCard>
+              <button onClick={() => setShowPoints(false)} className="text-left">
+                <KikiCard className="text-center !p-3 bg-gradient-to-br from-orange-50 to-amber-50">
+                  <div className="flex items-center justify-center gap-1">
+                    <p className="text-2xl font-bold text-foreground">{streak}</p>
+                    <Flame size={18} className={streak > 0 ? 'text-orange-500' : 'text-muted-foreground'} />
                   </div>
-                  <p className="text-sm font-bold">{thisMonthSessions.length}/{monthlyGoal}</p>
-                  <p className="text-[10px] text-muted-foreground">Este mes</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Racha (días)</p>
                 </KikiCard>
-                <KikiCard className="text-center !p-3">
-                  <p className="text-xl font-bold">{streak}</p>
-                  <p className="text-[10px] text-muted-foreground">Racha</p>
-                </KikiCard>
-                <KikiCard className="text-center !p-3">
-                  <p className="text-xl font-bold">{thisWeekSessions}</p>
-                  <p className="text-[10px] text-muted-foreground">Esta semana</p>
-                </KikiCard>
-              </div>
+              </button>
+              <KikiCard className="text-center !p-3">
+                <p className="text-2xl font-bold text-foreground">{thisWeekSessions}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Esta semana</p>
+              </KikiCard>
             </motion.div>
 
-            {/* Calendar */}
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+            {/* Calendario */}
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
               <KikiCard>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                    <CalendarIcon size={14} />
-                    {MONTHS_ES[currentMonth - 1]}
+                    <CalendarIcon size={14} /> Calendario del mes
                   </h3>
-                  <span className="text-[10px] text-muted-foreground">🟢 sesión completada</span>
                 </div>
-                <div className="grid grid-cols-7 gap-1.5">
-                  {Array.from({ length: daysInMonth }).map((_, i) => {
-                    const day = i + 1;
-                    const hasSession = sessionDatesThisMonth.has(day);
-                    const isToday = day === today;
-                    return (
-                      <div key={i} className="flex flex-col items-center">
-                        <span className={`text-[10px] mb-0.5 ${isToday ? 'font-bold text-mint' : 'text-muted-foreground'}`}>{day}</span>
-                        <div className={`w-5 h-5 rounded-full ${
-                          hasSession ? 'bg-mint' :
-                          isToday ? 'border-2 border-mint bg-background' :
-                          day < today ? 'bg-muted/50' : 'bg-muted'
-                        }`} />
-                      </div>
-                    );
-                  })}
+                <div className="grid grid-cols-7 gap-1 text-center mb-1">
+                  {['D','L','M','X','J','V','S'].map(d => <div key={d} className="text-[10px] font-semibold text-muted-foreground">{d}</div>)}
                 </div>
-                {!todayHasSession && (
-                  <p className="text-[10px] text-amber-600 mt-2 text-center">
-                    Hoy todavía no completaste tu sesión — ¡dale que podés!
-                  </p>
-                )}
+                <div className="grid grid-cols-7 gap-1">
+                  {(() => {
+                    const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+                    const cells: JSX.Element[] = [];
+                    for (let i = 0; i < firstDay; i++) cells.push(<div key={`e-${i}`} />);
+                    for (let d = 1; d <= daysInMonth; d++) {
+                      const completed = sessionDays.has(d);
+                      const isToday = d === today;
+                      const isPast = d < today;
+                      cells.push(
+                        <div key={d} className="aspect-square flex items-center justify-center">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-medium
+                            ${completed ? 'bg-mint text-navy' :
+                              isToday ? 'border-2 border-mint text-foreground' :
+                              isPast ? 'bg-muted/40 text-muted-foreground' : 'text-muted-foreground'}`}>
+                            {d}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return cells;
+                  })()}
+                </div>
+                <div className="flex items-center justify-center gap-3 mt-3 text-[10px] text-muted-foreground">
+                  <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-mint" />Completada</span>
+                  <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full border border-mint" />Hoy</span>
+                  <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-muted/60" />Pendiente</span>
+                </div>
               </KikiCard>
             </motion.div>
 
-            {/* Medals collapsed */}
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-              <KikiCard className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20" onClick={() => setShowMedals(!showMedals)}>
+            {/* Medallas link */}
+            <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+              onClick={() => navigate('/cuidadora/medals')} className="w-full">
+              <KikiCard className="bg-gradient-to-br from-amber-50 to-orange-50">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                    <Trophy size={24} className="text-amber-600" />
+                  <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
+                    <Trophy size={22} className="text-amber-600" />
                   </div>
+                  <div className="flex-1 text-left">
+                    <p className="text-sm font-bold">Medallas ({medalsCount})</p>
+                    <p className="text-xs text-muted-foreground">Ver todas las medallas</p>
+                  </div>
+                  <ChevronRight size={18} className="text-muted-foreground" />
+                </div>
+              </KikiCard>
+            </motion.button>
+
+            {/* Puntos y sorteo */}
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+              <KikiCard>
+                <div className="flex items-center gap-3 mb-3">
                   <div className="flex-1">
-                    <h3 className="text-sm font-bold">Medallas ({medals.length})</h3>
-                    <p className="text-xs text-muted-foreground">{totalPoints} puntos acumulados</p>
+                    <p className="text-3xl font-bold text-foreground">{totalPoints}</p>
+                    <p className="text-xs text-muted-foreground">puntos acumulados en {currentYear}</p>
                   </div>
-                  <ChevronRight size={18} className={`text-muted-foreground transition-transform ${showMedals ? 'rotate-90' : ''}`} />
+                  <div className="text-center px-3 py-2 rounded-xl bg-mint-50">
+                    <p className="text-2xl">🎁</p>
+                    <p className="text-[10px] font-medium text-mint-700">Sorteo dic.</p>
+                  </div>
+                </div>
+
+                <button onClick={() => setShowPoints(!showPoints)}
+                  className="flex items-center gap-1 text-xs text-mint-600 font-medium">
+                  <HelpCircle size={12} /> ¿Cómo funcionan los puntos? <ChevronRight size={12} className={`transition-transform ${showPoints ? 'rotate-90' : ''}`} />
+                </button>
+
+                {showPoints && (
+                  <div className="mt-3 pt-3 border-t border-border space-y-2 text-xs text-muted-foreground">
+                    <div>
+                      <p className="font-semibold text-foreground mb-1">Cómo ganar puntos:</p>
+                      <ul className="space-y-0.5 ml-2">
+                        <li>· Primera sesión: +10 pts</li>
+                        <li>· Cada sesión completada: +5 pts</li>
+                        <li>· Racha de 3 días: +15 pts</li>
+                        <li>· Semana completa: +25 pts</li>
+                        <li>· Medallas: +10 a +50 pts según medalla</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground mb-1">Sorteo anual (diciembre):</p>
+                      <p>Para participar necesitás ≥85% de adherencia y al menos 100 puntos acumulados en el año. Los puntos y medallas se reinician cada enero.</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-3 pt-3 border-t border-border">
+                  <p className="text-xs font-semibold text-foreground mb-2">🎁 Tu estado para el sorteo</p>
+                  <div className="space-y-1.5">
+                    <div>
+                      <div className="flex justify-between text-xs mb-0.5">
+                        <span className="text-muted-foreground">Adherencia</span>
+                        <span className="font-medium">{adherencePct}% / 85%</span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-muted">
+                        <div className={`h-1.5 rounded-full ${adherencePct >= 85 ? 'bg-mint' : 'bg-amber-400'}`} style={{ width: `${Math.min(100, (adherencePct / 85) * 100)}%` }} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-xs mb-0.5">
+                        <span className="text-muted-foreground">Puntos</span>
+                        <span className="font-medium">{totalPoints} / 100</span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-muted">
+                        <div className={`h-1.5 rounded-full ${totalPoints >= 100 ? 'bg-mint' : 'bg-amber-400'}`} style={{ width: `${Math.min(100, totalPoints)}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-2">
+                    {adherencePct >= 85 && totalPoints >= 100 ? '¡Estás dentro del sorteo!' : 'Alcanzá el 85% de adherencia y 100 pts para entrar al sorteo'}
+                  </p>
                 </div>
               </KikiCard>
             </motion.div>
-
-            {showMedals && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
-                {/* Tier: Inicio */}
-                <div>
-                  <h4 className="text-xs font-semibold mb-2 text-muted-foreground">🌱 Inicio</h4>
-                  <div className="grid grid-cols-3 gap-2">
-                    {medalDefs.filter(d => d.tier === 'inicio').map(def => {
-                      const earned = earnedTypes.has(def.type);
-                      return (
-                        <div key={def.type} className={`rounded-xl p-2 text-center ${earned ? 'bg-gradient-to-br from-mint-200 to-mint-50 dark:from-mint-900/30 dark:to-mint-800/20' : 'bg-muted/50 opacity-50'}`}>
-                          <span className="text-2xl">{def.icon}</span>
-                          <p className="text-[9px] font-bold leading-tight mt-1">{def.title}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                {/* Tier: Mensual */}
-                <div>
-                  <h4 className="text-xs font-semibold mb-2 text-muted-foreground">📈 Progreso mensual</h4>
-                  <div className="grid grid-cols-4 gap-2">
-                    {medalDefs.filter(d => d.tier === 'mensual').map(def => {
-                      const earned = earnedTypes.has(def.type);
-                      return (
-                        <div key={def.type} className={`rounded-xl p-2 text-center ${earned ? 'bg-gradient-to-br from-amber-200 to-amber-50 dark:from-amber-900/30 dark:to-amber-800/20' : 'bg-muted/50 opacity-50'}`}>
-                          <span className="text-xl">{def.icon}</span>
-                          <p className="text-[8px] font-bold leading-tight mt-1">{def.title}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                {/* Tier: Anual */}
-                <div>
-                  <h4 className="text-xs font-semibold mb-2 text-muted-foreground">🏛️ Logros anuales</h4>
-                  <div className="grid grid-cols-3 gap-2">
-                    {medalDefs.filter(d => d.tier === 'anual').map(def => {
-                      const earned = earnedTypes.has(def.type);
-                      return (
-                        <div key={def.type} className={`rounded-xl p-2 text-center ${earned ? 'bg-gradient-to-br from-purple-200 to-purple-50 dark:from-purple-900/30 dark:to-purple-800/20' : 'bg-muted/50 opacity-50'}`}>
-                          <span className="text-xl">{def.icon}</span>
-                          <p className="text-[8px] font-bold leading-tight mt-1">{def.title}</p>
-                          <p className="text-[7px] text-muted-foreground">{def.desc}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* Points info button */}
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-              <button
-                onClick={() => setShowPointsInfo(!showPointsInfo)}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-muted/50 text-sm text-muted-foreground hover:bg-muted transition-colors"
-              >
-                <HelpCircle size={16} />
-                ¿Cómo funcionan los puntos?
-              </button>
-            </motion.div>
-
-            {showPointsInfo && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <KikiCard className="bg-muted/30">
-                  <div className="space-y-2 text-xs text-muted-foreground">
-                    <p>• Completá <span className="font-medium text-foreground">10 sesiones/mes</span> para ganar una ⭐</p>
-                    <p>• Las <span className="font-medium text-foreground">medallas</span> otorgan puntos extra</p>
-                    <p>• Con <span className="font-medium text-foreground">≥85% adherencia + 100 pts</span> participás del sorteo anual 🎁</p>
-                    <p>• Los puntos y medallas se renuevan cada año tras el sorteo</p>
-                  </div>
-                </KikiCard>
-              </motion.div>
-            )}
           </>
         )}
       </div>
