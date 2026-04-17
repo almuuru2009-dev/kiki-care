@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Home, Users, MessageCircle, User, TrendingUp, Trophy, BookOpen, CalendarDays } from 'lucide-react';
+import { Home, Users, MessageCircle, User, TrendingUp, Trophy, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -13,9 +13,9 @@ interface BottomNavProps {
 const kineItems = [
   { icon: Home, label: 'Inicio', path: '/kine/home' },
   { icon: Users, label: 'Pacientes', path: '/kine/patients' },
-  { icon: CalendarDays, label: 'Agenda', path: '/kine/agenda' },
   { icon: MessageCircle, label: 'Mensajes', path: '/kine/messages', badge: true },
   { icon: BookOpen, label: 'Biblioteca', path: '/kine/exercises' },
+  { icon: User, label: 'Perfil', path: '/kine/profile' },
 ];
 
 const caregiverItems = [
@@ -45,7 +45,6 @@ export function BottomNav({ role, currentPath }: BottomNavProps) {
     };
     fetchUnread();
 
-    // Realtime subscription for messages
     const channel = supabase
       .channel('unread-badge')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => fetchUnread())
