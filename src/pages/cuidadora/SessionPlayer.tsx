@@ -42,7 +42,6 @@ export default function SessionPlayer() {
   const [showConfirmExit, setShowConfirmExit] = useState(false);
 
   // Earned points/medals queue
-  const [sessionPoints, setSessionPoints] = useState(0);
   const [medalQueue, setMedalQueue] = useState<MedalUnlock[]>([]);
   const [medalIdx, setMedalIdx] = useState(0);
 
@@ -96,7 +95,6 @@ export default function SessionPlayer() {
 
     // Recompute everything from real data
     const result = await evaluateMedalsAfterSession(user.id);
-    setSessionPoints(5 + result.pointsFromMedals);
     setMedalQueue(result.unlocked);
     setMedalIdx(0);
     setStage('completed');
