@@ -88,7 +88,8 @@ interface AvatarCircleProps {
 }
 
 export function AvatarCircle({ name, color = '#7EEDC4', size = 'md' }: AvatarCircleProps) {
-  const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  const safeName = name || '??';
+  const initials = safeName.split(' ').map(n => n[0]).filter(Boolean).join('').slice(0, 2).toUpperCase();
   const sizes = { sm: 'w-8 h-8 text-xs', md: 'w-10 h-10 text-sm', lg: 'w-16 h-16 text-xl' };
 
   return (

@@ -34,7 +34,7 @@ interface Appointment {
 export default function CuidadoraHome() {
   const navigate = useNavigate();
   const { user, profile } = useAuthContext();
-  const firstName = profile?.name?.split(' ')[0] || 'Cuidador/a';
+  const firstName = (profile?.name || '').split(' ')[0] || 'Cuidador/a';
   const greetingEmoji = new Date().getHours() < 12 ? '☀️' : new Date().getHours() < 18 ? '🌤' : '🌙';
 
   const [loading, setLoading] = useState(true);

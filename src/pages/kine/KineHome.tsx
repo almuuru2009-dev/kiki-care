@@ -151,7 +151,7 @@ export default function KineHome() {
     if (h < 18) return 'Buenas tardes';
     return 'Buenas noches';
   })();
-  const firstName = profile?.name?.split(' ').pop() || 'Profesional';
+  const firstName = (profile?.name || '').split(' ').pop() || 'Profesional';
   const hasPatients = patients.length > 0;
   const patientsAtRisk = patients.filter(p => p.riskLevel !== 'BAJO');
   const avgAdherence = hasPatients ? Math.round(patients.reduce((s, p) => s + p.adherencePercent, 0) / patients.length) : 0;
