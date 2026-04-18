@@ -158,7 +158,7 @@ export default function CuidadoraHome() {
   return (
     <AppShell>
       <motion.div className="px-5 pb-10" variants={stagger.container} initial="initial" animate="animate">
-        {/* Simplified Header */}
+        {/* Header */}
         <motion.div variants={stagger.item} className="pt-6 mb-6">
           <h1 className="text-2xl font-bold text-navy flex items-center gap-2">
             Hola, {firstName} <span className="text-2xl">{greetingEmoji}</span>
@@ -172,21 +172,6 @@ export default function CuidadoraHome() {
           <div className="flex justify-center py-12">
             <div className="w-8 h-8 border-2 border-mint border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : !isLinked ? (
-          <motion.div variants={stagger.item}>
-            <KikiCard className="text-center py-12 border-dashed border-2 border-mint/30 bg-mint-50/10">
-              <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">
-                <Hash size={28} className="text-blue-brand" />
-              </div>
-              <h2 className="text-lg font-bold text-navy mb-2">Vincular Kinesiólogo</h2>
-              <p className="text-sm text-muted-foreground mb-8 px-6 leading-relaxed">
-                Ingresá el código proporcionado por tu profesional para comenzar con el plan de rehabilitación.
-              </p>
-              <button onClick={() => navigate('/join')} className="btn-primary w-full max-w-[240px] flex items-center justify-center gap-2 mx-auto py-4 shadow-mint-lg">
-                Ingresar código <ArrowRight size={18} />
-              </button>
-            </KikiCard>
-          </motion.div>
         ) : (
           <div className="space-y-6">
             {/* Update Banner */}
@@ -221,173 +206,151 @@ export default function CuidadoraHome() {
               )}
             </AnimatePresence>
 
-            {/* Next Appointment - MAIN FOCUS */}
-            <motion.div variants={stagger.item}>
-              <KikiCard className="bg-blue-600 text-white shadow-blue-lg border-none overflow-hidden relative">
-                {/* Decorative circles */}
-                <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full" />
-                <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-white/10 rounded-full" />
-                
-                <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                      <Calendar size={20} className="text-white" />
-                    </div>
-                    <p className="text-sm font-bold uppercase tracking-wider text-blue-100">Próxima sesión</p>
+            {/* Main Content: Plan or Welcome */}
+            {!isLinked || !todayPlan ? (
+              <motion.div variants={stagger.item}>
+                <KikiCard className="text-center py-12">
+                  <div className="w-16 h-16 rounded-full bg-mint-50 flex items-center justify-center mx-auto mb-4">
+                    <Heart size={28} className="text-mint-500" />
                   </div>
-
-                  {nextAppointment ? (
-                    <div className="space-y-4">
-                      <div>
-                        <p className="text-2xl font-bold capitalize">
-                          {formatApptDate(nextAppointment.appointment_date)}
-                        </p>
-                        <p className="text-lg text-blue-100 flex items-center gap-1.5 mt-0.5 font-medium">
-                          <Clock size={18} /> {nextAppointment.start_time.slice(0, 5)} hs
-                        </p>
+                  <h2 className="text-lg font-bold text-navy mb-2">¡Bienvenida a KikiCare!</h2>
+                  <p className="text-sm text-muted-foreground mb-8 px-8 leading-relaxed">
+                    Tu kinesiólogo/a te asignará un plan de ejercicios. Mientras tanto, completá el perfil de tu hijo/a.
+                  </p>
+                  <button onClick={() => navigate('/cuidadora/child')} className="btn-secondary w-full max-w-[240px] mx-auto py-3">
+                    Ir a Mi Perfil
+                  </button>
+                </KikiCard>
+              </motion.div>
+            ) : (
+              <motion.div variants={stagger.item}>
+                <KikiCard className={`!p-5 ${todayCompleted ? 'bg-mint-50/30 border-mint-100' : ''}`}>
+                  {todayCompleted ? (
+                    <div className="text-center py-6">
+                      <div className="w-16 h-16 rounded-full bg-mint flex items-center justify-center mx-auto mb-4">
+                        <Trophy size={32} className="text-navy" />
                       </div>
-
-                      {nextAppointment.description && (
-                        <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm border border-white/5">
-                          <p className="text-xs text-blue-50 italic">"{nextAppointment.description}"</p>
-                        </div>
-                      )}
-
-                      <button 
-                        onClick={() => setShowUpcoming(!showUpcoming)}
-                        className="w-full py-3 bg-white text-blue-600 rounded-xl font-bold text-sm shadow-sm transition-transform active:scale-95"
-                      >
-                        {showUpcoming ? 'Ocultar agenda' : 'Ver próximas sesiones'}
+                      <h2 className="text-xl font-bold text-navy">¡Sesión completada!</h2>
+                      <p className="text-sm text-muted-foreground mt-2">¡Buen trabajo por hoy!</p>
+                      <button onClick={() => setShowTodayPlan(!showTodayPlan)} className="text-xs text-mint-600 font-bold mt-4 underline">
+                        {showTodayPlan ? 'Ocultar ejercicios' : 'Ver ejercicios realizados'}
                       </button>
-
-                      <AnimatePresence>
-                        {showUpcoming && upcomingAppointments.length > 0 && (
-                          <motion.div 
-                            initial={{ opacity: 0, height: 0 }} 
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="space-y-2 pt-4 border-t border-white/20"
-                          >
-                            {upcomingAppointments.map(appt => (
-                              <div key={appt.id} className="flex items-center justify-between text-xs py-1">
-                                <span className="text-blue-50 capitalize">{formatApptDate(appt.appointment_date)}</span>
-                                <span className="font-bold">{appt.start_time.slice(0, 5)} hs</span>
-                              </div>
-                            ))}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
                     </div>
                   ) : (
-                    <div className="py-2">
-                      <p className="text-lg font-bold">Sin consultas agendadas</p>
-                      <p className="text-sm text-blue-100 mt-1">Tu profesional aún no definió la próxima fecha.</p>
-                    </div>
+                    <>
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h2 className="text-lg font-bold text-navy">Plan de hoy</h2>
+                          <p className="text-xs text-muted-foreground">{todayPlan.exercises.length} ejercicios · ~{todayPlan.totalTime} minutos</p>
+                        </div>
+                        <div className="w-10 h-10 rounded-full bg-mint-50 flex items-center justify-center">
+                          <PlayCircle size={22} className="text-mint-600" />
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 mb-6">
+                        {todayPlan.exercises.map(ex => (
+                          <div key={ex.id} onClick={() => navigate(`/cuidadora/exercise/${ex.id}`)}
+                            className="flex items-center gap-3 p-3 rounded-xl bg-white border border-border/50 cursor-pointer hover:border-mint-200 transition-colors">
+                            <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: (ex.thumbnail_color || '#7EEDC4') + '20' }}>
+                              <div className="w-4 h-4 rounded-full" style={{ backgroundColor: ex.thumbnail_color || '#7EEDC4' }} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold truncate">{ex.name}</p>
+                              <p className="text-xs text-muted-foreground">{ex.sets} series · {ex.reps}</p>
+                            </div>
+                            <ChevronRight size={16} className="text-muted-foreground" />
+                          </div>
+                        ))}
+                      </div>
+
+                      <button onClick={() => navigate('/cuidadora/session')} className="btn-primary w-full py-4 flex items-center justify-center gap-2 text-base shadow-mint-lg">
+                        Comenzar sesión <ArrowRight size={20} />
+                      </button>
+                    </>
                   )}
+                  
+                  {/* Collapsible exercises if completed */}
+                  <AnimatePresence>
+                    {todayCompleted && showTodayPlan && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-4 pt-4 border-t border-mint-100 space-y-2">
+                        {todayPlan.exercises.map(ex => (
+                          <div key={ex.id} className="flex items-center gap-3 p-2 rounded-lg bg-white/50">
+                            <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ backgroundColor: (ex.thumbnail_color || '#7EEDC4') + '20' }}>
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ex.thumbnail_color || '#7EEDC4' }} />
+                            </div>
+                            <p className="text-xs font-medium truncate">{ex.name}</p>
+                          </div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </KikiCard>
+              </motion.div>
+            )}
+
+            {/* Next Appointment */}
+            <motion.div variants={stagger.item}>
+              <KikiCard className="bg-blue-50 border-blue-100">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                    <Calendar size={20} className="text-blue-brand" />
+                  </div>
+                  <h3 className="text-sm font-bold text-navy uppercase tracking-wider">Próxima consulta</h3>
                 </div>
+
+                {nextAppointment ? (
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className="text-base font-bold text-navy capitalize">
+                        {formatApptDate(nextAppointment.appointment_date)}
+                      </p>
+                      <p className="text-sm text-blue-700 flex items-center gap-1.5 mt-0.5">
+                        <Clock size={16} /> {nextAppointment.start_time.slice(0, 5)} hs
+                      </p>
+                    </div>
+                    {upcomingAppointments.length > 0 && (
+                      <button onClick={() => setShowUpcoming(!showUpcoming)} className="text-xs font-bold text-blue-600 bg-blue-100/50 px-2 py-1 rounded-lg">
+                        {showUpcoming ? 'Ver menos' : `+${upcomingAppointments.length} más`}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Aún sin consulta agendada</p>
+                )}
+
+                <AnimatePresence>
+                  {showUpcoming && upcomingAppointments.length > 0 && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-4 pt-4 border-t border-blue-100 space-y-2">
+                      {upcomingAppointments.map(appt => (
+                        <div key={appt.id} className="flex items-center justify-between text-xs py-1">
+                          <span className="text-blue-800 font-medium capitalize">{formatApptDate(appt.appointment_date)}</span>
+                          <span className="font-bold text-blue-900">{appt.start_time.slice(0, 5)} hs</span>
+                        </div>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </KikiCard>
             </motion.div>
 
-            {/* Navigation Grid */}
-            <motion.div variants={stagger.item} className="grid grid-cols-2 gap-4">
-              <button 
-                onClick={() => setShowTodayPlan(!showTodayPlan)}
-                className={`group p-5 rounded-2xl bg-card border shadow-kiki transition-all text-left relative overflow-hidden ${showTodayPlan ? 'border-mint' : 'border-border hover:border-mint'}`}
-              >
-                <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-mint/5 rounded-full group-hover:scale-150 transition-transform" />
-                <div className="w-10 h-10 rounded-xl bg-mint/10 flex items-center justify-center mb-4">
-                  <PlayCircle size={22} className="text-mint-600" />
-                </div>
-                <p className="text-sm font-bold text-navy">Plan de hoy</p>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  {todayCompleted ? '¡Sesión completada!' : `${todayPlan?.exercises.length || 0} ejercicios`}
-                </p>
-              </button>
-
-              <button 
-                onClick={() => navigate('/cuidadora/progress')}
-                className="group p-5 rounded-2xl bg-card border border-border shadow-kiki hover:border-blue-brand transition-all text-left relative overflow-hidden"
-              >
-                <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-blue-50 rounded-full group-hover:scale-150 transition-transform" />
-                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center mb-4">
-                  <TrendingUp size={22} className="text-blue-brand" />
-                </div>
-                <p className="text-sm font-bold text-navy">Progreso</p>
-                <p className="text-[10px] text-muted-foreground mt-1">Evolución y rachas</p>
-              </button>
-
-              <button 
-                onClick={() => navigate('/cuidadora/messages')}
-                className="group p-5 rounded-2xl bg-card border border-border shadow-kiki hover:border-violet-500 transition-all text-left relative overflow-hidden"
-              >
-                <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-violet-50 rounded-full group-hover:scale-150 transition-transform" />
-                <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center mb-4">
-                  <MessageCircle size={22} className="text-violet-500" />
-                </div>
-                <p className="text-sm font-bold text-navy">Mensajes</p>
-                <p className="text-[10px] text-muted-foreground mt-1">Consultar al profesional</p>
-              </button>
-
-              <button 
-                onClick={() => navigate('/cuidadora/medals')}
-                className="group p-5 rounded-2xl bg-card border border-border shadow-kiki hover:border-amber-500 transition-all text-left relative overflow-hidden"
-              >
-                <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-amber-50 rounded-full group-hover:scale-150 transition-transform" />
-                <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center mb-4">
-                  <Trophy size={22} className="text-amber-500" />
-                </div>
-                <p className="text-sm font-bold text-navy">Medallas</p>
-                <p className="text-[10px] text-muted-foreground mt-1">Logros desbloqueados</p>
-              </button>
-            </motion.div>
-
-            {/* Today's Plan Collapsible Content */}
-            <AnimatePresence>
-              {showTodayPlan && todayPlan && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <KikiCard className="!p-4 border-mint-100 bg-mint-50/5">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm font-bold text-navy flex items-center gap-2">
-                        <ListChecks size={18} className="text-mint-600" /> Detalle del plan
-                      </h3>
-                      <span className="text-[10px] font-bold text-mint-700 bg-mint-100 px-2 py-0.5 rounded-full uppercase">
-                        ~{todayPlan.totalTime} min
-                      </span>
-                    </div>
-                    
-                    <div className="space-y-2 mb-4">
-                      {todayPlan.exercises.map(ex => (
-                        <div key={ex.id} onClick={() => navigate(`/cuidadora/exercise/${ex.id}`)}
-                          className="flex items-center gap-3 p-2 rounded-xl bg-white/80 border border-mint-50 cursor-pointer hover:bg-white transition-colors">
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: (ex.thumbnail_color || '#7EEDC4') + '20' }}>
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: ex.thumbnail_color || '#7EEDC4' }} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold truncate">{ex.name}</p>
-                            <p className="text-[9px] text-muted-foreground">{ex.sets} series · {ex.reps}</p>
-                          </div>
-                          <ChevronRight size={14} className="text-muted-foreground" />
-                        </div>
-                      ))}
-                    </div>
-
-                    {!todayCompleted && (
-                      <button 
-                        onClick={() => navigate('/cuidadora/session')}
-                        className="btn-primary w-full py-3 text-sm shadow-mint-sm"
-                      >
-                        Comenzar sesión completa →
-                      </button>
-                    )}
-                  </KikiCard>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {/* Quick Access Grid (Mini) */}
+            {!todayCompleted && (
+              <motion.div variants={stagger.item} className="grid grid-cols-3 gap-3">
+                <button onClick={() => navigate('/cuidadora/progress')} className="flex flex-col items-center justify-center p-3 rounded-xl bg-card border border-border shadow-sm">
+                  <TrendingUp size={18} className="text-blue-brand mb-1" />
+                  <span className="text-[10px] font-bold">Progreso</span>
+                </button>
+                <button onClick={() => navigate('/cuidadora/messages')} className="flex flex-col items-center justify-center p-3 rounded-xl bg-card border border-border shadow-sm">
+                  <MessageCircle size={18} className="text-violet-500 mb-1" />
+                  <span className="text-[10px] font-bold">Mensajes</span>
+                </button>
+                <button onClick={() => navigate('/cuidadora/medals')} className="flex flex-col items-center justify-center p-3 rounded-xl bg-card border border-border shadow-sm">
+                  <Trophy size={18} className="text-amber-500 mb-1" />
+                  <span className="text-[10px] font-bold">Logros</span>
+                </button>
+              </motion.div>
+            )}
           </div>
         )}
       </motion.div>
