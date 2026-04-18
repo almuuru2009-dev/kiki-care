@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Plus, Mail, Archive, Unlink, ArchiveRestore, AlertTriangle, Users, Filter } from 'lucide-react';
+import { Search, Plus, Mail, Archive, Unlink, ArchiveRestore, AlertTriangle, Users, Filter, Copy, ExternalLink, Hash } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle, RiskBadge } from '@/components/kiki/KikiComponents';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { calculateRisk, type FamilyPattern } from '@/lib/maa';
+import { calculateRisk, type FamilyPattern } from '@/lib/kae';
 
 interface PatientInfo {
   linkId: string;
@@ -43,10 +43,9 @@ export default function PatientList() {
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('all');
 
   // Add patient modal
-  const [showAddPatient, setShowAddPatient] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteSent, setInviteSent] = useState(false);
+  const [generatedCode, setGeneratedCode] = useState('');
 
   // Action modals
   const [actionPatient, setActionPatient] = useState<PatientInfo | null>(null);
@@ -98,7 +97,7 @@ export default function PatientList() {
         baselineDurationMinutes: 20,
         responseLatencyHours: lastSessionDaysAgo > 3 ? 48 : 6,
       };
-      const maaResult = calculateRisk(pattern);
+      const kaeResult = calculateRisk(pattern);
 
       return {
         linkId: link.id, childId: link.child_id,
@@ -110,7 +109,7 @@ export default function PatientList() {
         age: child?.age || null,
         status: link.status,
         adherencePercent,
-        riskLevel: maaResult.riskLevel,
+        riskLevel: kaeResult.riskLevel,
         lastSessionDaysAgo,
       };
     });
@@ -137,29 +136,31 @@ export default function PatientList() {
 
   const activeFilterCount = [gmfcsFilter !== null, adherenceFilter !== 'all', riskFilter !== 'all'].filter(Boolean).length;
 
-  const handleSendInvite = async () => {
-    if (!inviteEmail.trim() || !inviteEmail.includes('@')) { toast.error('Ingresá un email válido'); return; }
+  const handleGenerateCode = async () => {
     setInviteSending(true);
     try {
-      const { data: existing } = await supabase.from('therapist_caregiver_links')
-        .select('id, status').eq('therapist_id', user!.id).eq('caregiver_email', inviteEmail.toLowerCase())
-        .in('status', ['pending', 'active']);
-      if (existing && existing.length > 0) {
-        toast.error(existing[0].status === 'active' ? 'Ya tenés un vínculo activo' : 'Ya hay una invitación pendiente');
-        setInviteSending(false); return;
-      }
-      const { error } = await supabase.from('therapist_caregiver_links').insert({
-        therapist_id: user!.id, caregiver_email: inviteEmail.toLowerCase(), status: 'pending',
-      });
-      if (error) toast.error('Error al enviar la invitación');
-      else {
-        setInviteSent(true);
-        toast.success(`Invitación enviada a ${inviteEmail}`);
-        await loadPatients();
-        setTimeout(() => { setShowAddPatient(false); setInviteEmail(''); setInviteSent(false); }, 2000);
-      }
-    } catch { toast.error('Error inesperado'); }
-    setInviteSending(false);
+      const code = `KIKI-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      const { data, error } = await supabase.from('invitations').insert({
+        code,
+        kinesio_id: user!.id,
+      }).select().single();
+
+      if (error) throw error;
+      
+      setGeneratedCode(code);
+      setInviteSent(true);
+      toast.success('Código generado con éxito');
+    } catch (err: any) {
+      console.error('Error generating code:', err);
+      toast.error('Error al generar el código');
+    } finally {
+      setInviteSending(false);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success('Copiado al portapapeles');
   };
 
   const handleArchive = async (linkId: string) => {
@@ -324,32 +325,54 @@ export default function PatientList() {
         <Plus size={24} />
       </button>
 
-      {/* Add Patient Modal */}
       {showAddPatient && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-6" onClick={() => !inviteSending && setShowAddPatient(false)}>
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
             className="bg-card rounded-2xl p-6 w-full max-w-[340px] shadow-kiki-lg" onClick={e => e.stopPropagation()}>
             {inviteSent ? (
-              <div className="text-center py-4">
-                <p className="text-3xl mb-2">✉️</p>
-                <h3 className="font-bold text-lg">Invitación enviada</h3>
-                <p className="text-sm text-muted-foreground mt-1">El cuidador recibirá la vinculación al iniciar sesión.</p>
+              <div className="space-y-4">
+                <div className="text-center">
+                  <div className="w-12 h-12 rounded-full bg-mint-50 flex items-center justify-center mx-auto mb-2">
+                    <Hash size={24} className="text-mint-600" />
+                  </div>
+                  <h3 className="font-bold text-lg">Código generado</h3>
+                  <p className="text-xs text-muted-foreground mt-1">Compartí este código o el link con el cuidador/a.</p>
+                </div>
+
+                <div className="bg-muted/50 p-4 rounded-xl border border-border flex flex-col items-center">
+                  <p className="text-2xl font-black tracking-widest text-navy mb-1">{generatedCode}</p>
+                  <button onClick={() => copyToClipboard(generatedCode)} className="flex items-center gap-1.5 text-xs text-mint-600 font-bold uppercase tracking-wider">
+                    <Copy size={12} /> Copiar código
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase text-center">Link de acceso rápido</p>
+                  <div className="flex items-center gap-2 bg-muted/30 p-2 rounded-lg border border-border overflow-hidden">
+                    <p className="text-[10px] truncate flex-1 text-muted-foreground">{window.location.origin}/join?code={generatedCode}</p>
+                    <button onClick={() => copyToClipboard(`${window.location.origin}/join?code=${generatedCode}`)} className="p-1.5 rounded-md bg-white border border-border text-muted-foreground">
+                      <Copy size={12} />
+                    </button>
+                  </div>
+                </div>
+
+                <button onClick={() => { setShowAddPatient(false); setInviteSent(false); }} className="btn-primary w-full text-sm">Listo</button>
               </div>
             ) : (
               <>
-                <h3 className="text-lg font-bold mb-1">Agregar paciente</h3>
-                <p className="text-xs text-muted-foreground mb-4">Ingresá el email del cuidador/a.</p>
-                <div className="space-y-3">
-                  <div className="relative">
-                    <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input type="email" className="input-kiki pl-10 text-sm" placeholder="email@ejemplo.com"
-                      value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} autoFocus />
+                <h3 className="text-lg font-bold mb-1">Vincular nuevo paciente</h3>
+                <p className="text-xs text-muted-foreground mb-6">Generá un código único para vincularte con la familia.</p>
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-mint-50/50 border border-mint-100">
+                    <p className="text-xs text-mint-800 leading-relaxed">
+                      El código será válido por 24 horas. Una vez que el cuidador lo use, se activará el seguimiento.
+                    </p>
                   </div>
-                  <div className="flex gap-2">
-                    <button onClick={handleSendInvite} className="btn-primary flex-1 text-sm" disabled={inviteSending || !inviteEmail.trim()}>
-                      {inviteSending ? 'Enviando...' : 'Enviar invitación'}
+                  <div className="flex flex-col gap-2">
+                    <button onClick={handleGenerateCode} className="btn-primary w-full text-sm py-3" disabled={inviteSending}>
+                      {inviteSending ? 'Generando...' : 'Generar código KIKI'}
                     </button>
-                    <button onClick={() => { setShowAddPatient(false); setInviteEmail(''); }} className="btn-ghost flex-1 text-sm">Cancelar</button>
+                    <button onClick={() => setShowAddPatient(false)} className="btn-ghost w-full text-sm">Cancelar</button>
                   </div>
                 </div>
               </>

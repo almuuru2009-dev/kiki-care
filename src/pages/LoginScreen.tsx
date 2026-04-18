@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import kikiMascot from '@/assets/kiki-mascot.png';
 
 export default function LoginScreen() {
@@ -34,19 +35,7 @@ export default function LoginScreen() {
     if (prof.role === 'kinesiologist') {
       navigate('/kine/home', { replace: true });
     } else {
-      if (user?.email) {
-        const { data } = await supabase
-          .from('therapist_caregiver_links')
-          .select('id')
-          .eq('caregiver_email', user.email)
-          .eq('status', 'pending')
-          .limit(1);
 
-        if (data && data.length > 0) {
-          navigate('/pending-invitations', { replace: true });
-          return;
-        }
-      }
 
       const pendingChild = localStorage.getItem('kikicare_pending_child');
       if (pendingChild && user) {
@@ -73,10 +62,17 @@ export default function LoginScreen() {
     setError('');
     setLoading(true);
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
+
+    if (data.user && !data.user.email_confirmed_at) {
+      await supabase.auth.signOut();
+      toast.error("Verificá tu email antes de entrar. Revisá tu bandeja.");
+      setLoading(false);
+      return;
+    }
 
     if (authError) {
       if (authError.message.includes('Email not confirmed')) {

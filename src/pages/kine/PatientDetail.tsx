@@ -8,7 +8,7 @@ import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle, RiskBadge } from '@/components/kiki/KikiComponents';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { calculateRisk, type FamilyPattern } from '@/lib/maa';
+import { calculateRisk, type FamilyPattern } from '@/lib/kae';
 import { toast } from 'sonner';
 
 const tabs = ['Resumen', 'Plan', 'Historial'];
@@ -170,7 +170,7 @@ export default function PatientDetail() {
     baselineDurationMinutes: 20,
     responseLatencyHours: lastSessionDaysAgo > 3 ? 48 : 6,
   };
-  const maaResult = calculateRisk(pattern);
+  const kaeResult = calculateRisk(pattern);
 
   const sessionsWithDiff = sessions.filter(s => s.difficulty !== null);
   const avgDiff = sessionsWithDiff.length >= 3 ? (sessionsWithDiff.reduce((s, ss) => s + (ss.difficulty || 0), 0) / sessionsWithDiff.length).toFixed(1) : null;
@@ -234,7 +234,7 @@ export default function PatientDetail() {
           <tr><th>Diagnóstico</th><td>${child.diagnosis || 'No especificado'}</td></tr>
           <tr><th>GMFCS</th><td>${child.gmfcs ? 'Nivel ' + child.gmfcs : 'No especificado'}</td></tr>
           <tr><th>Cuidador/a</th><td>${caregiverName}</td></tr>
-          <tr><th>Riesgo MAA</th><td>${maaResult.riskLevel} (${maaResult.riskScore}/100)</td></tr>
+          <tr><th>Riesgo KAE</th><td>${kaeResult.riskLevel} (${kaeResult.riskScore}/100)</td></tr>
         </table>
         <h2>Resumen de adherencia</h2>
         <table>
@@ -260,8 +260,8 @@ export default function PatientDetail() {
           `).join('')}
         </table>
         <h2>Observaciones clínicas</h2>
-        <p>${maaResult.triggerReason}</p>
-        <p><strong>Acción sugerida:</strong> ${maaResult.suggestedAction}</p>
+        <p>${kaeResult.triggerReason}</p>
+        <p><strong>Acción sugerida:</strong> ${kaeResult.suggestedAction}</p>
         <div class="footer">
           <p>Generado por KikiCare · ${new Date().toLocaleDateString('es-AR')} · Herramienta de apoyo clínico.</p>
         </div>
@@ -315,7 +315,7 @@ export default function PatientDetail() {
               </p>
               <div className="flex items-center gap-1.5 mt-1">
                 {child.gmfcs && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-muted">GMFCS {child.gmfcs}</span>}
-                <RiskBadge level={maaResult.riskLevel} />
+                <RiskBadge level={kaeResult.riskLevel} />
               </div>
             </div>
           </div>
@@ -358,10 +358,10 @@ export default function PatientDetail() {
           {/* TAB: RESUMEN */}
           {activeTab === 0 && (
             <div className="space-y-3">
-              {maaResult.riskLevel !== 'BAJO' && (
-                <KikiCard className={`border-l-4 !p-3 ${maaResult.riskLevel === 'ALTO' ? 'border-l-rust bg-red-50' : 'border-l-gold bg-amber-50'}`}>
-                  <p className="text-xs font-semibold">Alerta MAA: Riesgo {maaResult.riskLevel}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{maaResult.triggerReason}</p>
+              {kaeResult.riskLevel !== 'BAJO' && (
+                <KikiCard className={`border-l-4 !p-3 ${kaeResult.riskLevel === 'ALTO' ? 'border-l-rust bg-red-50' : 'border-l-gold bg-amber-50'}`}>
+                  <p className="text-xs font-semibold">Alerta KAE: Riesgo {kaeResult.riskLevel}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{kaeResult.triggerReason}</p>
                 </KikiCard>
               )}
 
@@ -406,12 +406,12 @@ export default function PatientDetail() {
                         ))}
                       </div>
                     )}
-                    <div className={`p-2.5 rounded-lg ${maaResult.riskLevel === 'ALTO' ? 'bg-red-50 border border-red-200' : maaResult.riskLevel === 'MODERADO' ? 'bg-amber-50 border border-amber-200' : 'bg-mint-50 border border-mint-200'}`}>
+                    <div className={`p-2.5 rounded-lg ${kaeResult.riskLevel === 'ALTO' ? 'bg-red-50 border border-red-200' : kaeResult.riskLevel === 'MODERADO' ? 'bg-amber-50 border border-amber-200' : 'bg-mint-50 border border-mint-200'}`}>
                       <div className="flex items-center gap-1.5 mb-0.5">
-                        <RiskBadge level={maaResult.riskLevel} />
-                        <span className="text-[10px] font-semibold">Estado MAA</span>
+                        <RiskBadge level={kaeResult.riskLevel} />
+                        <span className="text-[10px] font-semibold">Estado KAE</span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground">{maaResult.suggestedAction}</p>
+                      <p className="text-[11px] text-muted-foreground">{kaeResult.suggestedAction}</p>
                     </div>
                   </motion.div>
                 )}
@@ -453,7 +453,7 @@ export default function PatientDetail() {
               ) : (
                 <div className="space-y-2">
                   {activePlanExercises.map(ex => (
-                    <KikiCard key={ex.planId} className="!p-3">
+                    <KikiCard key={ex.planId} onClick={() => navigate(`/kine/exercise/${ex.exerciseId}`)} className="!p-3 cursor-pointer hover:bg-muted/30 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-lg bg-mint-50 flex items-center justify-center shrink-0">
                           <span className="text-sm">🏋️</span>

@@ -24,7 +24,7 @@ export default function PrivacyScreen() {
           <p><span className="font-medium">Datos de comunicación:</span> Mensajes entre kinesiólogo y cuidador dentro de la App.</p>
 
           <h2 className="font-semibold text-base">2. Cómo Utilizamos la Información</h2>
-          <p>Utilizamos los datos exclusivamente para: facilitar el seguimiento terapéutico entre profesional y familia, generar alertas de adherencia (Motor MAA), producir reportes e informes de progreso, mejorar la calidad del servicio.</p>
+          <p>Utilizamos los datos exclusivamente para: facilitar el seguimiento terapéutico entre profesional y familia, generar alertas de adherencia (KAE), producir reportes e informes de progreso, mejorar la calidad del servicio.</p>
 
           <h2 className="font-semibold text-base">3. Base Legal</h2>
           <p>El tratamiento de datos se realiza conforme a la Ley 25.326 de Protección de Datos Personales y su Decreto Reglamentario 1558/2001. Los datos sensibles de salud se tratan bajo consentimiento expreso del titular o su representante legal.</p>
@@ -41,8 +41,8 @@ export default function PrivacyScreen() {
           <h2 className="font-semibold text-base">7. Datos de Menores</h2>
           <p>Los datos de los niños son ingresados y gestionados exclusivamente por sus cuidadores legales. KikiCare no recopila datos directamente de menores.</p>
 
-          <h2 className="font-semibold text-base">8. Motor de Adherencia Adaptativa (MAA)</h2>
-          <p>El MAA procesa datos de uso (frecuencia, duración, horarios, ánimo) de forma automatizada para generar alertas de riesgo de abandono. Este procesamiento tiene fines exclusivamente terapéuticos y los resultados son orientativos.</p>
+          <h2 className="font-semibold text-base">8. Kiki Adherence Engine (KAE)</h2>
+          <p>El KAE procesa datos de uso (frecuencia, duración, horarios, ánimo) de forma automatizada para generar alertas de riesgo de abandono. Este procesamiento tiene fines exclusivamente terapéuticos y los resultados son orientativos.</p>
 
           <h2 className="font-semibold text-base">9. Retención de Datos</h2>
           <p>Los datos se conservan mientras la cuenta esté activa y durante 12 meses posteriores a la última actividad. Pasado este plazo, los datos se eliminan de forma irreversible salvo obligación legal que requiera su conservación.</p>

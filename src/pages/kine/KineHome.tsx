@@ -7,7 +7,8 @@ import { AppShell } from '@/components/layout/AppShell';
 import { KikiCard, StatBadge, AvatarCircle, RiskBadge } from '@/components/kiki/KikiComponents';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { calculateRisk, type FamilyPattern } from '@/lib/maa';
+import { calculateRisk, type FamilyPattern } from '@/lib/kae';
+import { KineAgenda } from '@/components/kine/KineAgenda';
 
 const stagger = {
   container: { transition: { staggerChildren: 0.06 } },
@@ -91,7 +92,7 @@ export default function KineHome() {
     const todayStr = now.toISOString().split('T')[0];
     setTodaySessions(allSessions.filter(s => s.completed_at.startsWith(todayStr)).length);
 
-    // Build patient summaries with MAA
+    // Build patient summaries with KAE
     const mapped: PatientSummary[] = links.map(link => {
       const child = link.child_id ? childrenMap.get(link.child_id) : null;
       const caregiver = link.caregiver_id ? profileMap.get(link.caregiver_id) : null;
@@ -109,7 +110,7 @@ export default function KineHome() {
         ? Math.floor((now.getTime() - new Date(lastSession.completed_at).getTime()) / 86400000)
         : 30;
 
-      // MAA risk calculation
+      // KAE risk calculation
       const pattern: FamilyPattern = {
         patientId: link.id,
         baselineFrequency: 5,
@@ -120,7 +121,7 @@ export default function KineHome() {
         baselineDurationMinutes: 20,
         responseLatencyHours: lastSessionDaysAgo > 3 ? 48 : 6,
       };
-      const maaResult = calculateRisk(pattern);
+      const kaeResult = calculateRisk(pattern);
 
       return {
         linkId: link.id,
@@ -134,8 +135,8 @@ export default function KineHome() {
         sessionCount: childSessions.length,
         lastSessionDaysAgo,
         adherencePercent,
-        riskLevel: maaResult.riskLevel,
-        riskScore: maaResult.riskScore,
+        riskLevel: kaeResult.riskLevel,
+        riskScore: kaeResult.riskScore,
       };
     });
 
@@ -154,7 +155,7 @@ export default function KineHome() {
   const hasPatients = patients.length > 0;
   const patientsAtRisk = patients.filter(p => p.riskLevel !== 'BAJO');
   const avgAdherence = hasPatients ? Math.round(patients.reduce((s, p) => s + p.adherencePercent, 0) / patients.length) : 0;
-  const recentActivity = [...patients].sort((a, b) => a.lastSessionDaysAgo - b.lastSessionDaysAgo).slice(0, 5);
+
 
   return (
     <AppShell>
@@ -262,43 +263,9 @@ export default function KineHome() {
               </KikiCard>
             </motion.div>
 
-            {/* Recent Activity Feed */}
+            {/* Agenda Module */}
             <motion.div variants={stagger.item} className="mb-2">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold">Actividad reciente</h3>
-                <button onClick={() => navigate('/kine/patients')} className="text-xs text-mint-600 font-medium">
-                  Ver todos
-                </button>
-              </div>
-              <div className="space-y-2">
-                {recentActivity.map(p => (
-                  <KikiCard
-                    key={p.linkId}
-                    className="!p-3"
-                    onClick={() => navigate(`/kine/patients/${p.linkId}`)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <AvatarCircle name={p.childName} color={p.avatarColor} size="sm" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-medium truncate">{p.childName}</p>
-                          <RiskBadge level={p.riskLevel} />
-                        </div>
-                        <p className="text-[11px] text-muted-foreground">
-                          {p.lastSessionDaysAgo === 0 ? 'Hoy' : p.lastSessionDaysAgo === 1 ? 'Ayer' : `Hace ${p.lastSessionDaysAgo} días`}
-                          {p.diagnosis ? ` · ${p.diagnosis}` : ''}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className={`text-sm font-bold ${p.adherencePercent >= 70 ? 'text-mint-600' : p.adherencePercent >= 40 ? 'text-gold' : 'text-rust'}`}>
-                          {p.adherencePercent}%
-                        </p>
-                        <p className="text-[9px] text-muted-foreground">adherencia</p>
-                      </div>
-                    </div>
-                  </KikiCard>
-                ))}
-              </div>
+              <KineAgenda />
             </motion.div>
           </>
         )}

@@ -39,8 +39,8 @@ export default function TermsScreen() {
           <h2 className="font-semibold text-base">7. Limitación de Responsabilidad</h2>
           <p>KikiCare no es responsable por: diagnósticos médicos, decisiones terapéuticas tomadas en base a la información de la App, lesiones derivadas de la ejecución incorrecta de ejercicios, interrupciones del servicio por causas ajenas.</p>
 
-          <h2 className="font-semibold text-base">8. Motor de Adherencia Adaptativa (MAA)</h2>
-          <p>El MAA es una herramienta de apoyo que genera alertas basadas en patrones de uso. Las alertas son orientativas y no constituyen un diagnóstico ni reemplazan el juicio clínico del profesional.</p>
+          <h2 className="font-semibold text-base">8. Kiki Adherence Engine (KAE)</h2>
+          <p>El KAE es una herramienta de apoyo que genera alertas basadas en patrones de uso. Las alertas son orientativas y no constituyen un diagnóstico ni reemplazan el juicio clínico del profesional.</p>
 
           <h2 className="font-semibold text-base">9. Cancelación</h2>
           <p>Podés cancelar tu cuenta en cualquier momento desde la configuración de la App. La cancelación implica la pérdida de acceso a los datos después de 12 meses de inactividad.</p>

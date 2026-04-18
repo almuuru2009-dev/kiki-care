@@ -16,6 +16,8 @@ import FAQScreen from "./pages/FAQScreen";
 import TermsScreen from "./pages/TermsScreen";
 import PrivacyScreen from "./pages/PrivacyScreen";
 import PendingInvitationsScreen from "./pages/PendingInvitationsScreen";
+import AuthConfirmScreen from "./pages/AuthConfirmScreen";
+import JoinScreen from "./pages/JoinScreen";
 
 import KineHome from "./pages/kine/KineHome";
 import PatientList from "./pages/kine/PatientList";
@@ -63,6 +65,8 @@ const App = () => (
               <Route path="/faq" element={<FAQScreen />} />
               <Route path="/terms" element={<TermsScreen />} />
               <Route path="/privacy" element={<PrivacyScreen />} />
+              <Route path="/auth/confirm" element={<AuthConfirmScreen />} />
+              <Route path="/join" element={<ProtectedRoute><JoinScreen /></ProtectedRoute>} />
               <Route path="/pending-invitations" element={<ProtectedRoute><PendingInvitationsScreen /></ProtectedRoute>} />
               <Route path="/onboarding" element={<ProtectedRoute><OnboardingScreen /></ProtectedRoute>} />
 
@@ -79,6 +83,7 @@ const App = () => (
               <Route path="/kine/exercises" element={<ProtectedRoute allowedRole="kinesiologist"><ExerciseLibraryScreen /></ProtectedRoute>} />
               <Route path="/kine/exercises/create" element={<ProtectedRoute allowedRole="kinesiologist"><CreateExerciseScreen /></ProtectedRoute>} />
               <Route path="/kine/exercises/edit/:id" element={<ProtectedRoute allowedRole="kinesiologist"><EditExerciseScreen /></ProtectedRoute>} />
+              <Route path="/kine/exercise/:id" element={<ProtectedRoute allowedRole="kinesiologist"><ExerciseDetailScreen /></ProtectedRoute>} />
               <Route path="/kine/protocols/create" element={<ProtectedRoute allowedRole="kinesiologist"><CreateProtocolScreen /></ProtectedRoute>} />
               <Route path="/kine/agenda" element={<ProtectedRoute allowedRole="kinesiologist"><AgendaScreen /></ProtectedRoute>} />
 

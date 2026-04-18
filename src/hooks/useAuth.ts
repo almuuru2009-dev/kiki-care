@@ -62,7 +62,7 @@ export function useAuth() {
       password,
       options: {
         data: metadata,
-        emailRedirectTo: window.location.origin + '/login',
+        emailRedirectTo: window.location.origin + '/auth/confirm',
       },
     });
     return { data, error };

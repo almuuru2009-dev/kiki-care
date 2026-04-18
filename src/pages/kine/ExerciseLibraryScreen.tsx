@@ -309,7 +309,7 @@ export default function ExerciseLibraryScreen() {
               ) : (
                 <div className="space-y-2">
                   {filteredMyExercises.map(ex => (
-                    <KikiCard key={ex.id} onClick={() => setSelectedMyEx(ex)} className="cursor-pointer">
+                    <KikiCard key={ex.id} onClick={() => navigate(`/kine/exercise/${ex.id}`)} className="cursor-pointer">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-mint-50 flex items-center justify-center text-xl">🏋️</div>
                         <div className="flex-1 min-w-0">
@@ -349,7 +349,7 @@ export default function ExerciseLibraryScreen() {
                 <div className="grid grid-cols-2 gap-2">
                   {filteredCommunity.map(item => (
                     <CommunityCard key={item.id} item={item} isFav={favoriteIds.has(item.id)}
-                      onToggleFav={() => toggleFavorite(item.id)} onClick={() => setSelectedExercise(item)} />
+                      onToggleFav={() => toggleFavorite(item.id)} onClick={() => navigate(`/kine/exercise/${item.id}`)} />
                   ))}
                 </div>
                 {filteredCommunity.length === 0 && (
@@ -406,7 +406,7 @@ export default function ExerciseLibraryScreen() {
                 <div className="grid grid-cols-2 gap-2">
                   {favoriteExercises.map(item => (
                     <CommunityCard key={item.id} item={item} isFav={true}
-                      onToggleFav={() => toggleFavorite(item.id)} onClick={() => setSelectedExercise(item)} />
+                      onToggleFav={() => toggleFavorite(item.id)} onClick={() => navigate(`/kine/exercise/${item.id}`)} />
                   ))}
                 </div>
               )
@@ -415,102 +415,7 @@ export default function ExerciseLibraryScreen() {
         )}
       </div>
 
-      {/* My exercise detail panel */}
-      {selectedMyEx && (
-        <AnimatePresence>
-          <motion.div className="fixed inset-0 bg-black/40 z-50" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedMyEx(null)} />
-          <motion.div className="fixed top-0 right-0 bottom-0 w-full max-w-[450px] bg-background z-50 overflow-y-auto shadow-2xl"
-            initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25 }}>
-            <div className="sticky top-0 bg-gradient-to-b from-mint-100 to-background p-4 pb-6">
-              <button onClick={() => setSelectedMyEx(null)} className="w-8 h-8 rounded-full bg-card/80 flex items-center justify-center mb-4" aria-label="Cerrar">
-                <X size={18} />
-              </button>
-              <h2 className="font-display text-xl text-foreground">{selectedMyEx.name}</h2>
-              <p className="text-xs text-muted-foreground mt-1">{selectedMyEx.target_area || 'General'} · {selectedMyEx.duration || 5} min · {selectedMyEx.sets || 3} series</p>
-            </div>
-            <div className="p-4 space-y-4">
-              {selectedMyEx.description && (
-                <KikiCard>
-                  <h3 className="text-sm font-semibold mb-1">Descripción</h3>
-                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{selectedMyEx.description}</p>
-                </KikiCard>
-              )}
-              {selectedMyEx.video_url && (
-                <KikiCard>
-                  <h3 className="text-sm font-semibold mb-2">Video</h3>
-                  <video src={selectedMyEx.video_url} controls className="w-full rounded-lg" />
-                </KikiCard>
-              )}
-            </div>
-            <div className="sticky bottom-0 p-4 bg-background border-t border-border space-y-2">
-              <button onClick={() => { setShowAssignModal(selectedMyEx.id); }} className="btn-primary w-full text-sm">
-                Asignar a paciente
-              </button>
-              <div className="flex gap-2">
-                <button onClick={() => navigate(`/kine/exercises/edit/${selectedMyEx.id}`)} className="btn-secondary flex-1 text-xs py-2">
-                  <Edit size={12} className="inline mr-1" /> Editar
-                </button>
-                {!selectedMyEx.is_community && (
-                  <button onClick={() => handleShareExercise(selectedMyEx.id)} className="btn-secondary flex-1 text-xs py-2">
-                    <Users size={12} className="inline mr-1" /> Compartir
-                  </button>
-                )}
-                <button onClick={() => handleDeleteExercise(selectedMyEx.id)} className="flex-1 text-xs py-2 rounded-[10px] bg-rust/10 text-rust font-medium">
-                  <Trash2 size={12} className="inline mr-1" /> Eliminar
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </AnimatePresence>
-      )}
 
-      {/* Community exercise detail panel */}
-      {selectedExercise && (
-        <AnimatePresence>
-          <motion.div className="fixed inset-0 bg-black/40 z-50" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedExercise(null)} />
-          <motion.div className="fixed top-0 right-0 bottom-0 w-full max-w-[450px] bg-background z-50 overflow-y-auto shadow-2xl"
-            initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25 }}>
-            <div className="sticky top-0 bg-gradient-to-b from-mint-100 to-background p-4 pb-6">
-              <button onClick={() => setSelectedExercise(null)} className="w-8 h-8 rounded-full bg-card/80 flex items-center justify-center mb-4" aria-label="Cerrar">
-                <X size={18} />
-              </button>
-              <p className="text-2xl mb-2">{selectedExercise.icon || '🏋️'}</p>
-              <h2 className="font-display text-xl text-foreground">{selectedExercise.clinical_name}</h2>
-              {selectedExercise.simple_name && <p className="text-sm text-muted-foreground italic mt-1">{selectedExercise.simple_name}</p>}
-            </div>
-            <div className="p-4 space-y-4">
-              {selectedExercise.description && (
-                <KikiCard>
-                  <h3 className="text-sm font-semibold mb-1">Descripción</h3>
-                  <p className="text-xs text-muted-foreground">{selectedExercise.description}</p>
-                </KikiCard>
-              )}
-              {selectedExercise.instructions && (
-                <KikiCard>
-                  <h3 className="text-sm font-semibold mb-1">Instrucciones</h3>
-                  <p className="text-xs text-muted-foreground">{selectedExercise.instructions}</p>
-                </KikiCard>
-              )}
-              {selectedExercise.video_url && (
-                <KikiCard>
-                  <h3 className="text-sm font-semibold mb-2">Video</h3>
-                  <video src={selectedExercise.video_url} controls className="w-full rounded-lg" />
-                </KikiCard>
-              )}
-              <div className="text-xs text-muted-foreground">
-                <p>Autor: {selectedExercise.author_name} {selectedExercise.author_city ? `· ${selectedExercise.author_city}` : ''}</p>
-              </div>
-            </div>
-            <div className="sticky bottom-0 p-4 bg-background border-t border-border space-y-2">
-              <button onClick={() => setShowAssignModal(selectedExercise.id)} className="btn-primary w-full text-sm">Agregar al plan de un paciente</button>
-              <button onClick={() => toggleFavorite(selectedExercise.id)} className="btn-secondary w-full text-xs py-2">
-                <Heart size={12} className={`inline mr-1 ${favoriteIds.has(selectedExercise.id) ? 'fill-red-500 text-red-500' : ''}`} />
-                {favoriteIds.has(selectedExercise.id) ? 'Quitar de favoritos' : 'Agregar a favoritos'}
-              </button>
-            </div>
-          </motion.div>
-        </AnimatePresence>
-      )}
 
       {/* Assign to patient modal */}
       {showAssignModal && (

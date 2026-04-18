@@ -87,7 +87,7 @@ export default function RegisterScreen() {
       password: formData.password,
       options: {
         data: metadata,
-        emailRedirectTo: window.location.origin + '/login',
+        emailRedirectTo: window.location.origin + '/auth/confirm',
       },
     });
 

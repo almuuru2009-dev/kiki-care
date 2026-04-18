@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Play, Pause } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -26,6 +26,8 @@ type Stage = 'session' | 'survey' | 'completed' | 'medal';
 export default function SessionPlayer() {
   const navigate = useNavigate();
   const { user } = useAuthContext();
+  const [searchParams] = useSearchParams();
+  const isUpdate = searchParams.get('update') === 'true';
 
   const [exercises, setExercises] = useState<ExerciseItem[]>([]);
   const [childId, setChildId] = useState<string | null>(null);
@@ -54,16 +56,42 @@ export default function SessionPlayer() {
     const cid = children[0].id;
     setChildId(cid);
 
-    const { data: plans } = await supabase.from('treatment_plans').select('exercise_id').eq('child_id', cid).eq('active', true);
+    const { data: plans } = await supabase.from('treatment_plans').select('exercise_id, created_at, updated_at').eq('child_id', cid).eq('active', true);
     if (plans && plans.length > 0) {
-      const exerciseIds = plans.map(p => p.exercise_id);
-      const { data: exData } = await supabase.from('exercises').select('*').in('id', exerciseIds);
-      if (exData) {
-        setExercises(exData.map(e => ({
-          id: e.id, name: e.name, sets: e.sets || 3, reps: e.reps || '10 repeticiones',
-          target_area: e.target_area, thumbnail_color: e.thumbnail_color || '#7EEDC4',
-          description: e.description, duration: e.duration || 5,
-        })));
+      let exerciseIds = plans.map(p => p.exercise_id);
+
+      if (isUpdate) {
+        // Find latest non-update session today
+        const today = new Date().toISOString().split('T')[0];
+        const { data: lastSession } = await supabase
+          .from('sessions')
+          .select('completed_at')
+          .eq('child_id', cid)
+          .eq('caregiver_id', user.id)
+          .eq('is_update', false)
+          .gte('completed_at', today + 'T00:00:00')
+          .order('completed_at', { descending: true })
+          .limit(1)
+          .maybeSingle();
+        
+        if (lastSession) {
+          const cutOff = lastSession.completed_at;
+          const newPlanIds = plans
+            .filter(p => p.created_at > cutOff || (p.updated_at && p.updated_at > cutOff))
+            .map(p => p.exercise_id);
+          exerciseIds = newPlanIds;
+        }
+      }
+
+      if (exerciseIds.length > 0) {
+        const { data: exData } = await supabase.from('exercises').select('*').in('id', exerciseIds);
+        if (exData) {
+          setExercises(exData.map(e => ({
+            id: e.id, name: e.name, sets: e.sets || 3, reps: e.reps || '10 repeticiones',
+            target_area: e.target_area, thumbnail_color: e.thumbnail_color || '#7EEDC4',
+            description: e.description, duration: e.duration || 5,
+          })));
+        }
       }
     }
     setLoading(false);
@@ -90,14 +118,20 @@ export default function SessionPlayer() {
       difficulty: difficulty + 1,
       child_mood: childMood !== null ? childMood + 1 : null,
       pain_reported: painReported,
-      note: note || null,
+      note: note || (isUpdate ? 'Sesión completada con actualización' : null),
+      is_update: isUpdate
     });
 
-    // Recompute everything from real data
-    const result = await evaluateMedalsAfterSession(user.id);
-    setMedalQueue(result.unlocked);
-    setMedalIdx(0);
-    setStage('completed');
+    if (isUpdate) {
+      setMedalQueue([]);
+      setStage('completed');
+    } else {
+      // Recompute everything from real data
+      const result = await evaluateMedalsAfterSession(user.id);
+      setMedalQueue(result.unlocked);
+      setMedalIdx(0);
+      setStage('completed');
+    }
   };
 
   const continueAfterCompleted = () => {

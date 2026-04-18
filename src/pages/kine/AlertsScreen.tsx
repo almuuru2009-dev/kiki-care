@@ -7,8 +7,8 @@ import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle, RiskBadge } from '@/components/kiki/KikiComponents';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { calculateRisk, type FamilyPattern } from '@/lib/maa';
-import { MAAInfoModal } from './MAAInfoModal';
+import { calculateRisk, type FamilyPattern } from '@/lib/kae';
+import { KAEInfoModal } from './KAEInfoModal';
 
 interface AlertData {
   id: string;
@@ -76,7 +76,7 @@ export default function AlertsScreen() {
         baselineDurationMinutes: 20,
         responseLatencyHours: lastSessionDaysAgo > 3 ? 48 : 6,
       };
-      const maa = calculateRisk(pattern);
+      const kaeResult = calculateRisk(pattern);
 
       return {
         id: link.id,
@@ -84,10 +84,10 @@ export default function AlertsScreen() {
         childName: child?.name || 'Sin nombre',
         diagnosis: child?.diagnosis || null,
         age: child?.age || null,
-        riskLevel: maa.riskLevel,
-        riskScore: maa.riskScore,
-        triggerReason: maa.triggerReason,
-        suggestedAction: maa.suggestedAction,
+        riskLevel: kaeResult.riskLevel,
+        riskScore: kaeResult.riskScore,
+        triggerReason: kaeResult.triggerReason,
+        suggestedAction: kaeResult.suggestedAction,
         lastSessionDaysAgo,
         adherencePercent,
       };
@@ -103,14 +103,14 @@ export default function AlertsScreen() {
 
   return (
     <AppShell hideNav>
-      <ScreenHeader title="Alertas MAA" backButton rightAction={
-        <button onClick={() => setShowInfo(true)} aria-label="Info MAA"><Info size={20} className="text-muted-foreground" /></button>
+      <ScreenHeader title="Alertas KAE" backButton rightAction={
+        <button onClick={() => setShowInfo(true)} aria-label="Info KAE"><Info size={20} className="text-muted-foreground" /></button>
       } />
 
       <div className="px-4 pb-6">
         <KikiCard className="bg-mint-50 border border-mint-200 mb-4 !p-3">
           <p className="text-xs text-mint-700 leading-relaxed">
-            El Motor de Adherencia Adaptativa analiza el comportamiento de cada familia y detecta cambios antes de que el abandono ocurra.
+            El Kiki Adherence Engine analiza el comportamiento de cada familia y detecta cambios antes de que el abandono ocurra.
           </p>
         </KikiCard>
 
@@ -193,7 +193,7 @@ export default function AlertsScreen() {
         )}
       </div>
 
-      <MAAInfoModal open={showInfo} onClose={() => setShowInfo(false)} />
+      <KAEInfoModal open={showInfo} onClose={() => setShowInfo(false)} />
     </AppShell>
   );
 }

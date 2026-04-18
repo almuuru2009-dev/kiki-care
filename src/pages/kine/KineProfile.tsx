@@ -201,7 +201,7 @@ export default function KineProfile() {
           </KikiCard>
         </motion.div>
 
-        {/* MAA Engine Info */}
+        {/* KAE Engine Info */}
         <motion.div variants={stagger.item}>
           <KikiCard onClick={() => setShowMAAInfo(!showMAAInfo)} className="cursor-pointer bg-gradient-to-r from-blue-50 to-mint-50">
             <div className="flex items-center gap-3">
@@ -209,14 +209,14 @@ export default function KineProfile() {
                 <Activity size={20} className="text-blue-600" />
               </div>
               <div className="flex-1">
-                <h3 className="text-sm font-semibold">Motor de Adherencia Adaptativa (MAA)</h3>
+                <h3 className="text-sm font-semibold">Kiki Adherence Engine (KAE)</h3>
                 <p className="text-[10px] text-muted-foreground">Sistema inteligente de seguimiento de pacientes</p>
               </div>
               <ChevronRight size={16} className="text-muted-foreground" />
             </div>
             {showMAAInfo && (
               <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="mt-3 pt-3 border-t border-border space-y-2">
-                <p className="text-xs text-foreground">El MAA analiza automáticamente el comportamiento de cada familia para detectar riesgo de abandono terapéutico.</p>
+                <p className="text-xs text-foreground">El KAE analiza automáticamente el comportamiento de cada familia para detectar riesgo de abandono terapéutico.</p>
                 <div className="space-y-1.5">
                   <p className="text-[10px] font-semibold text-foreground">Variables analizadas:</p>
                   {[
@@ -253,7 +253,7 @@ export default function KineProfile() {
             </h3>
             {[
               { label: 'Mensajes nuevos', value: notifNewMessages, onChange: (v: boolean) => { setNotifNewMessages(v); handleSaveSetting('therapist_messages', v); } },
-              { label: 'Alertas MAA (adherencia)', value: notifAlerts, onChange: (v: boolean) => { setNotifAlerts(v); handleSaveSetting('daily_reminder', v); } },
+              { label: 'Alertas KAE (adherencia)', value: notifAlerts, onChange: (v: boolean) => { setNotifAlerts(v); handleSaveSetting('daily_reminder', v); } },
               { label: 'Reporte semanal', value: notifWeeklyReport, onChange: (v: boolean) => { setNotifWeeklyReport(v); handleSaveSetting('weekly_reports', v); } },
             ].map(item => (
               <div key={item.label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
@@ -317,12 +317,7 @@ export default function KineProfile() {
           </motion.div>
         )}
 
-        {/* Support */}
-        <motion.div variants={stagger.item}>
-          <a href="mailto:soporte.kikicare@gmail.com" className="w-full text-center py-2 text-sm text-muted-foreground font-medium block">
-            📧 Contactar soporte
-          </a>
-        </motion.div>
+
       </motion.div>
 
       {/* Feedback modal */}

@@ -298,7 +298,16 @@ export default function ChildProfile() {
                 </div>
               </>
             ) : (
-              <div className="text-center py-4"><p className="text-sm text-muted-foreground">No tenés un kinesiólogo vinculado</p><p className="text-xs text-muted-foreground mt-1">Pedile a tu kinesiólogo que te envíe una invitación por email</p></div>
+              <div className="text-center py-4">
+                <p className="text-sm text-muted-foreground">No tenés un kinesiólogo vinculado</p>
+                <p className="text-xs text-muted-foreground mt-1 mb-4">Pedile a tu profesional su código de vinculación KIKI</p>
+                <button 
+                  onClick={() => navigate('/join')} 
+                  className="btn-secondary w-full text-xs py-2 flex items-center justify-center gap-2"
+                >
+                  <Hash size={12} /> Ingresar código
+                </button>
+              </div>
             )}
           </KikiCard>
         </motion.div>
@@ -379,12 +388,7 @@ export default function ChildProfile() {
           </motion.div>
         )}
 
-        {/* Support */}
-        <motion.div variants={stagger.item}>
-          <a href="mailto:soporte.kikicare@gmail.com" className="w-full text-center py-2 text-sm text-muted-foreground font-medium block">
-            📧 Contactar soporte
-          </a>
-        </motion.div>
+
       </motion.div>
 
       {/* Unlink confirmation */}

@@ -248,7 +248,7 @@ Deno.serve(async (req) => {
     // === NOTIFICATIONS ===
     await admin.from("notifications").insert([
       { user_id: kineId, title: "Nuevo paciente vinculado", body: "María García aceptó la invitación.", type: "link", read: true },
-      { user_id: kineId, title: "Alerta MAA", body: "Lucas Martínez muestra baja adherencia esta semana.", type: "alert", read: false },
+      { user_id: kineId, title: "Alerta KAE", body: "Lucas Martínez muestra baja adherencia esta semana.", type: "alert", read: false },
       { user_id: kineId, title: "Sesión completada", body: "Tomás García completó su sesión de hoy.", type: "session", read: false },
       { user_id: careId, title: "¡Medalla desbloqueada!", body: "Ganaste la medalla 'Campeón' por completar 20 sesiones.", type: "medal", read: false },
       { user_id: careId, title: "Recordatorio", body: "No olvides la sesión de hoy.", type: "reminder", read: true },

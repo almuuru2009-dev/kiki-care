@@ -111,11 +111,11 @@ export const exercisePlans: ExercisePlan[] = [
 ];
 
 export const notifications: Notification[] = [
-  { id: 'not-1', type: 'alert', title: 'Alerta MAA — Sofía Berardi', description: '5 días sin actividad registrada', timestamp: format(subDays(today, 0), "yyyy-MM-dd'T'08:00:00"), isRead: false, link: '/kine/alerts', color: '#C84B2F' },
+  { id: 'not-1', type: 'alert', title: 'Alerta KAE — Sofía Berardi', description: '5 días sin actividad registrada', timestamp: format(subDays(today, 0), "yyyy-MM-dd'T'08:00:00"), isRead: false, link: '/kine/alerts', color: '#C84B2F' },
   { id: 'not-2', type: 'session', title: 'Sesión completada', description: 'Luciana completó la sesión de Valentín', timestamp: format(subDays(today, 0), "yyyy-MM-dd'T'07:30:00"), isRead: false, link: '/kine/patients/pat-1', color: '#7EEDC4' },
   { id: 'not-3', type: 'message', title: 'Nuevo mensaje', description: 'Luciana Gómez te envió un mensaje', timestamp: format(subDays(today, 1), "yyyy-MM-dd'T'09:30:00"), isRead: true, link: '/kine/messages/conv-1', color: '#3B8FD0' },
   { id: 'not-4', type: 'milestone', title: 'Logro desbloqueado', description: 'Valentín completó 20 sesiones', timestamp: format(subDays(today, 3), "yyyy-MM-dd'T'14:00:00"), isRead: true, link: '/cuidadora/child', color: '#D4971A' },
-  { id: 'not-5', type: 'alert', title: 'Alerta MAA — Mía Ruiz', description: 'Patrón de registro irregular detectado', timestamp: format(subDays(today, 1), "yyyy-MM-dd'T'10:00:00"), isRead: false, link: '/kine/alerts', color: '#C84B2F' },
+  { id: 'not-5', type: 'alert', title: 'Alerta KAE — Mía Ruiz', description: 'Patrón de registro irregular detectado', timestamp: format(subDays(today, 1), "yyyy-MM-dd'T'10:00:00"), isRead: false, link: '/kine/alerts', color: '#C84B2F' },
 ];
 
 export const milestones: Milestone[] = [
