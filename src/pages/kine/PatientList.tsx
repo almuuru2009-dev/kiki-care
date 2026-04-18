@@ -43,6 +43,7 @@ export default function PatientList() {
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('all');
 
   // Add patient modal
+  const [showAddPatient, setShowAddPatient] = useState(false);
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteSent, setInviteSent] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');

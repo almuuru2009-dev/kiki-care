@@ -13,7 +13,7 @@ export function PatientCard({ patient, onClick, compact }: PatientCardProps) {
     return (
       <div onClick={onClick} className="min-w-[140px] card-kiki p-3 cursor-pointer active:scale-[0.97] transition-transform">
         <AvatarCircle name={patient.name} color={patient.avatarColor} size="sm" />
-        <p className="text-sm font-medium mt-2 truncate">{patient.name.split(' ')[0]}</p>
+        <p className="text-sm font-medium mt-2 truncate">{(patient.name || '').split(' ')[0]}</p>
         <p className="text-[11px] text-muted-foreground">{patient.adherence}% adherencia</p>
       </div>
     );
