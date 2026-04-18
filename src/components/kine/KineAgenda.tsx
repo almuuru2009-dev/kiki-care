@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Plus, Clock, X, Calendar as CalendarIcon } from 'lucide-react';
 import { KikiCard } from '@/components/kiki/KikiComponents';
 import { supabase } from '@/integrations/supabase/client';
