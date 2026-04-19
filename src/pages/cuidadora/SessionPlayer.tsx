@@ -99,7 +99,7 @@ export default function SessionPlayer() {
           .eq('caregiver_id', user.id)
           .eq('is_update', false)
           .gte('completed_at', today + 'T00:00:00')
-          .order('completed_at', { descending: true })
+          .order('completed_at', { ascending: false })
           .limit(1)
           .maybeSingle();
 
