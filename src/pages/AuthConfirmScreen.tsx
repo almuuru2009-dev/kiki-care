@@ -15,7 +15,7 @@ export default function AuthConfirmScreen() {
         // Supabase handles the token in the URL automatically. 
         // We just need to check if the session is active now.
         const { data: { session }, error } = await supabase.auth.getSession();
-        
+
         if (error) {
           console.error('Error confirming auth:', error);
           setStatus('error');
@@ -40,8 +40,8 @@ export default function AuthConfirmScreen() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background items-center justify-center p-6 max-w-[420px] mx-auto">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.9 }} 
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         className="w-full"
       >
@@ -71,8 +71,8 @@ export default function AuthConfirmScreen() {
               </div>
               <h2 className="text-xl font-bold text-rust">Link inválido o expirado</h2>
               <p className="text-sm text-muted-foreground mt-2">No pudimos verificar tu cuenta. Por favor, solicitá un nuevo enlace o contactá a soporte.</p>
-              <button 
-                onClick={() => navigate('/login')} 
+              <button
+                onClick={() => navigate('/login')}
                 className="btn-primary mt-8 w-full py-3"
               >
                 Volver al login

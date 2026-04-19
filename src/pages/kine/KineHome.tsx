@@ -83,30 +83,37 @@ export default function KineHome() {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split('T')[0];
-      const count = allSessions.filter(s => s.completed_at.startsWith(dateStr)).length;
+      const count = allSessions.filter(s => s.completed_at && s.completed_at.startsWith(dateStr)).length;
       weekData.push({ day: dayNames[d.getDay()], sessions: count });
     }
     setWeeklyActivity(weekData);
 
     // Today's sessions
     const todayStr = now.toISOString().split('T')[0];
-    setTodaySessions(allSessions.filter(s => s.completed_at.startsWith(todayStr)).length);
+    setTodaySessions(allSessions.filter(s => s.completed_at && s.completed_at.startsWith(todayStr)).length);
 
     // Build patient summaries with KAE
-    const mapped: PatientSummary[] = links.map(link => {
+    const mapped: PatientSummary[] = (links || []).map(link => {
       const child = link.child_id ? childrenMap.get(link.child_id) : null;
       const caregiver = link.caregiver_id ? profileMap.get(link.caregiver_id) : null;
       const childSessions = allSessions.filter(s => s.child_id === link.child_id);
 
       // Calculate adherence (sessions in last 14 days vs expected 5/week)
       const twoWeeksAgo = new Date(now.getTime() - 14 * 86400000);
-      const recentSessions = childSessions.filter(s => new Date(s.completed_at) >= twoWeeksAgo);
+      const recentSessions = childSessions.filter(s => {
+        if (!s.completed_at) return false;
+        try {
+          return new Date(s.completed_at) >= twoWeeksAgo;
+        } catch (e) {
+          return false;
+        }
+      });
       const expectedSessions = 10; // 5/week * 2 weeks
       const adherencePercent = Math.min(100, Math.round((recentSessions.length / expectedSessions) * 100));
 
       // Last session days ago
       const lastSession = childSessions[0];
-      const lastSessionDaysAgo = lastSession
+      const lastSessionDaysAgo = lastSession && lastSession.completed_at
         ? Math.floor((now.getTime() - new Date(lastSession.completed_at).getTime()) / 86400000)
         : 30;
 
@@ -121,7 +128,13 @@ export default function KineHome() {
         baselineDurationMinutes: 20,
         responseLatencyHours: lastSessionDaysAgo > 3 ? 48 : 6,
       };
-      const kaeResult = calculateRisk(pattern);
+      
+      let kaeResult;
+      try {
+        kaeResult = calculateRisk(pattern);
+      } catch (err) {
+        kaeResult = { riskLevel: 'BAJO' as const, riskScore: 0 };
+      }
 
       return {
         linkId: link.id,

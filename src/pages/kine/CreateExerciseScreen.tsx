@@ -111,11 +111,25 @@ export default function CreateExerciseScreen() {
       const { error } = await supabase.from('exercises').insert({
         created_by: user.id,
         name: form.clinicalName,
-        description: [form.caregiverName && `Nombre para cuidador: ${form.caregiverName}`, form.instructions, form.goodSigns && `Señales positivas: ${form.goodSigns}`, form.stopSigns && `Cuándo parar: ${form.stopSigns}`].filter(Boolean).join('\n\n'),
+        simple_name: form.caregiverName || null,
+        description: form.instructions, // Use instructions as the main description
         target_area: form.bodyAreas.join(', '),
+        category: form.objectives.join(', '),
+        gmfcs: form.gmfcs.join(', '),
+        age_range: form.ageRanges.join(', '),
+        indications: form.indications || null,
+        contraindications: form.contraindications || null,
+        clinical_objective: form.clinicalObjective || null,
+        evidence: form.evidenceLevel || null,
+        instructions: form.instructions || null,
         duration: parseInt(form.durationPerRep) || 5,
-        sets: parseInt(form.reps) || 3,
+        sets: 3, // Default sets
         reps: form.reps || '10 repeticiones',
+        difficulty: form.difficulty || null,
+        good_signs: form.goodSigns || null,
+        stop_signs: form.stopSigns || null,
+        caregiver_precautions: form.caregiverPrecautions || null,
+        variants: form.variants || null,
         video_url: videoUrl,
         is_community: share,
       });

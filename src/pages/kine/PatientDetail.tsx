@@ -153,12 +153,21 @@ export default function PatientDetail() {
   // Calculations
   const now = new Date();
   const twoWeeksAgo = new Date(now.getTime() - 14 * 86400000);
-  const recentSessions = sessions.filter(s => new Date(s.completed_at) >= twoWeeksAgo);
+  const recentSessions = (sessions || []).filter(s => {
+    if (!s.completed_at) return false;
+    try {
+      return new Date(s.completed_at) >= twoWeeksAgo;
+    } catch (e) {
+      return false;
+    }
+  });
   const expectedSessions = 10;
   const adherencePercent = Math.min(100, Math.round((recentSessions.length / expectedSessions) * 100));
-  const totalSessions = sessions.length;
-  const lastSession = sessions[0];
-  const lastSessionDaysAgo = lastSession ? Math.floor((now.getTime() - new Date(lastSession.completed_at).getTime()) / 86400000) : 30;
+  const totalSessions = (sessions || []).length;
+  const lastSession = (sessions || [])[0];
+  const lastSessionDaysAgo = lastSession && lastSession.completed_at 
+    ? Math.floor((now.getTime() - new Date(lastSession.completed_at).getTime()) / 86400000) 
+    : 30;
 
   const pattern: FamilyPattern = {
     patientId: linkId!,
@@ -170,25 +179,39 @@ export default function PatientDetail() {
     baselineDurationMinutes: 20,
     responseLatencyHours: lastSessionDaysAgo > 3 ? 48 : 6,
   };
-  const kaeResult = calculateRisk(pattern);
+  
+  let kaeResult;
+  try {
+    kaeResult = calculateRisk(pattern);
+  } catch (err) {
+    kaeResult = { riskLevel: 'BAJO' as const, riskScore: 0, triggerReason: '', suggestedAction: '' };
+  }
 
-  const sessionsWithDiff = sessions.filter(s => s.difficulty !== null);
-  const avgDiff = sessionsWithDiff.length >= 3 ? (sessionsWithDiff.reduce((s, ss) => s + (ss.difficulty || 0), 0) / sessionsWithDiff.length).toFixed(1) : null;
-  const sessionsWithMood = sessions.filter(s => s.child_mood !== null);
-  const avgMood = sessionsWithMood.length >= 3 ? (sessionsWithMood.reduce((s, ss) => s + (ss.child_mood || 3), 0) / sessionsWithMood.length).toFixed(1) : null;
-  const painSessions = sessions.filter(s => s.pain_reported);
+  const sessionsWithDiff = (sessions || []).filter(s => s && s.difficulty !== null);
+  const avgDiff = sessionsWithDiff.length >= 3 ? (sessionsWithDiff.reduce((s, ss) => s + (Number(ss.difficulty) || 0), 0) / sessionsWithDiff.length).toFixed(1) : null;
+  const sessionsWithMood = (sessions || []).filter(s => s && s.child_mood !== null);
+  const avgMood = sessionsWithMood.length >= 3 ? (sessionsWithMood.reduce((s, ss) => s + (Number(ss.child_mood) || 3), 0) / sessionsWithMood.length).toFixed(1) : null;
+  const painSessions = (sessions || []).filter(s => s && s.pain_reported);
 
   // Streak & gap
-  const dates = sessions.map(s => s.completed_at.split('T')[0]).sort();
+  const dates = (sessions || [])
+    .filter(s => s && s.completed_at)
+    .map(s => s.completed_at.split('T')[0])
+    .sort();
+    
   let longestStreak = 0, currentStreak = 0, longestGap = 0;
   for (let i = 0; i < dates.length; i++) {
     if (i === 0) { currentStreak = 1; longestStreak = 1; continue; }
-    const diff = (new Date(dates[i]).getTime() - new Date(dates[i - 1]).getTime()) / 86400000;
-    if (diff === 1) { currentStreak++; longestStreak = Math.max(longestStreak, currentStreak); }
-    else { longestGap = Math.max(longestGap, diff); currentStreak = 1; }
+    try {
+      const diff = (new Date(dates[i]).getTime() - new Date(dates[i - 1]).getTime()) / 86400000;
+      if (diff === 1) { currentStreak++; longestStreak = Math.max(longestStreak, currentStreak); }
+      else { longestGap = Math.max(longestGap, diff); currentStreak = 1; }
+    } catch (e) {}
   }
 
-  const notes = sessions.filter(s => s.note).map(s => ({ date: s.completed_at.split('T')[0], note: s.note! }));
+  const notes = (sessions || [])
+    .filter(s => s && s.note && s.completed_at)
+    .map(s => ({ date: s.completed_at.split('T')[0], note: s.note! }));
 
   const handleArchive = async () => {
     await supabase.from('therapist_caregiver_links').update({ status: 'archived' }).eq('id', linkId!);

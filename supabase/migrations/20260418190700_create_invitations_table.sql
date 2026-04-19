@@ -1,31 +1,23 @@
--- Crear tabla de invitaciones por código
-CREATE TABLE IF NOT EXISTS public.invitations (
+-- Migración definitiva para invitaciones (Nuevo nombre para evitar conflictos)
+DROP TABLE IF EXISTS public.kiki_invitations CASCADE;
+
+CREATE TABLE public.kiki_invitations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    code TEXT UNIQUE NOT NULL,
-    kinesio_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    code TEXT NOT NULL UNIQUE,
+    kinesio_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'expired')),
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (now() + interval '24 hours'),
-    accepted_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+    expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '2 days'),
+    accepted_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Habilitar RLS
-ALTER TABLE public.invitations ENABLE CONTROL;
+ALTER TABLE public.kiki_invitations ENABLE ROW LEVEL SECURITY;
 
--- Políticas de RLS para invitaciones
-CREATE POLICY "Kinesiologos pueden crear sus propias invitaciones"
-    ON public.invitations FOR INSERT
-    WITH CHECK (auth.uid() = kinesio_id);
+-- Políticas de RLS
+CREATE POLICY "kiki_invitations_insert" ON public.kiki_invitations FOR INSERT TO authenticated WITH CHECK (auth.uid() = kinesio_id);
+CREATE POLICY "kiki_invitations_select" ON public.kiki_invitations FOR SELECT TO authenticated USING (true);
+CREATE POLICY "kiki_invitations_update" ON public.kiki_invitations FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 
-CREATE POLICY "Kinesiologos pueden ver sus propias invitaciones"
-    ON public.invitations FOR SELECT
-    USING (auth.uid() = kinesio_id);
-
-CREATE POLICY "Cualquier usuario autenticado puede ver invitaciones por código"
-    ON public.invitations FOR SELECT
-    USING (auth.role() = 'authenticated');
-
-CREATE POLICY "Usuarios pueden actualizar el estado de una invitación si la aceptan"
-    ON public.invitations FOR UPDATE
-    USING (status = 'pending')
-    WITH CHECK (auth.uid() = accepted_by);
+-- Realtime
+ALTER PUBLICATION supabase_realtime ADD TABLE public.kiki_invitations;

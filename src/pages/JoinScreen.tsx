@@ -29,7 +29,7 @@ export default function JoinScreen() {
     try {
       // 1. Buscar invitación
       const { data: invite, error: inviteErr } = await supabase
-        .from('invitations')
+        .from('kiki_invitations')
         .select('*')
         .eq('code', code.trim().toUpperCase())
         .single();
@@ -48,7 +48,7 @@ export default function JoinScreen() {
 
       if (invite.status === 'expired' || new Date(invite.expires_at) < new Date()) {
         if (invite.status !== 'expired') {
-          await supabase.from('invitations').update({ status: 'expired' }).eq('id', invite.id);
+          await supabase.from('kiki_invitations').update({ status: 'expired' }).eq('id', invite.id);
         }
         toast.error('El código ha expirado');
         setLoading(false);
@@ -75,7 +75,7 @@ export default function JoinScreen() {
       }
 
       // 3. Actualizar invitación
-      await supabase.from('invitations').update({
+      await supabase.from('kiki_invitations').update({
         status: 'accepted',
         accepted_by: user!.id
       }).eq('id', invite.id);

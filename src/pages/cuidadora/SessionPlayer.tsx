@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Play, Pause } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, Pause, CheckCircle2 } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import kikiMascot from '@/assets/kiki-mascot.png';
 import { evaluateMedalsAfterSession, type MedalUnlock } from '@/lib/medals';
+import { toast } from 'sonner';
 
 const faces = ['😓', '😕', '😐', '🙂', '😄'];
 const childMoods = ['😢', '😐', '🙂', '😄', '🤩'];
@@ -42,6 +43,7 @@ export default function SessionPlayer() {
   const [painReported, setPainReported] = useState(false);
   const [note, setNote] = useState('');
   const [showConfirmExit, setShowConfirmExit] = useState(false);
+  const [completedExercises, setCompletedExercises] = useState<Set<string>>(new Set());
 
   // Earned points/medals queue
   const [medalQueue, setMedalQueue] = useState<MedalUnlock[]>([]);
@@ -61,7 +63,6 @@ export default function SessionPlayer() {
       let exerciseIds = plans.map(p => p.exercise_id);
 
       if (isUpdate) {
-        // Find latest non-update session today
         const today = new Date().toISOString().split('T')[0];
         const { data: lastSession } = await supabase
           .from('sessions')
@@ -87,9 +88,9 @@ export default function SessionPlayer() {
         const { data: exData } = await supabase.from('exercises').select('*').in('id', exerciseIds);
         if (exData) {
           setExercises(exData.map(e => ({
-            id: e.id, name: e.name, sets: e.sets || 3, reps: e.reps || '10 repeticiones',
+            id: e.id, name: e.simple_name || e.name, sets: e.sets || 3, reps: e.reps || '10 repeticiones',
             target_area: e.target_area, thumbnail_color: e.thumbnail_color || '#7EEDC4',
-            description: e.description, duration: e.duration || 5,
+            description: e.instructions || e.description, duration: e.duration || 5,
           })));
         }
       }
@@ -99,11 +100,28 @@ export default function SessionPlayer() {
 
   const exercise = exercises[currentEx];
   const totalSets = exercise?.sets || 3;
+  const isCurrentExCompleted = exercise ? completedExercises.has(exercise.id) : false;
+  const allCompleted = exercises.length > 0 && completedExercises.size === exercises.length;
+
+  const handleMarkAsCompleted = () => {
+    if (!exercise) return;
+    setCompletedExercises(prev => new Set(prev).add(exercise.id));
+    toast.success('¡Ejercicio completado! 💪');
+    
+    if (currentEx + 1 < exercises.length) {
+      setTimeout(() => {
+        setCurrentEx(currentEx + 1);
+        setCurrentSet(0);
+      }, 1000);
+    }
+  };
 
   const handleNextSet = () => {
     if (currentSet + 1 < totalSets) setCurrentSet(currentSet + 1);
-    else if (currentEx + 1 < exercises.length) { setCurrentEx(currentEx + 1); setCurrentSet(0); }
-    else setStage('survey');
+    else if (currentEx + 1 < exercises.length) { 
+      setCurrentEx(currentEx + 1); 
+      setCurrentSet(0); 
+    }
   };
 
   const handlePrevExercise = () => {
@@ -126,7 +144,6 @@ export default function SessionPlayer() {
       setMedalQueue([]);
       setStage('completed');
     } else {
-      // Recompute everything from real data
       const result = await evaluateMedalsAfterSession(user.id);
       setMedalQueue(result.unlocked);
       setMedalIdx(0);
@@ -162,7 +179,6 @@ export default function SessionPlayer() {
     );
   }
 
-  // STAGE: completion celebration
   if (stage === 'completed') {
     const currentMedal = medalQueue[0];
     return (
@@ -193,14 +209,13 @@ export default function SessionPlayer() {
           </p>
         )}
 
-        <button onClick={continueAfterCompleted} className="btn-primary w-full max-w-[280px] mt-4">
+        <button onClick={continueAfterCompleted} className="btn-primary w-full max-w-[280px] mt-4 shadow-mint-lg">
           Continuar
         </button>
       </div>
     );
   }
 
-  // STAGE: medal popups
   if (stage === 'medal') {
     const medal = medalQueue[medalIdx];
     return (
@@ -218,7 +233,7 @@ export default function SessionPlayer() {
         <div className="bg-amber-50 rounded-2xl px-6 py-3 mb-6">
           <p className="text-xl font-bold text-amber-700">+{medal.points} pts</p>
         </div>
-        <button onClick={continueAfterMedal} className="btn-primary w-full max-w-[280px]">
+        <button onClick={continueAfterMedal} className="btn-primary w-full max-w-[280px] shadow-gold-lg">
           {medalIdx + 1 < medalQueue.length ? 'Siguiente medalla' : 'Continuar'}
         </button>
         <button onClick={() => navigate('/cuidadora/medals')} className="text-sm text-mint-600 font-medium mt-3">
@@ -228,7 +243,6 @@ export default function SessionPlayer() {
     );
   }
 
-  // STAGE: post-session survey
   if (stage === 'survey') {
     return (
       <div className="flex flex-col min-h-screen bg-background">
@@ -272,7 +286,7 @@ export default function SessionPlayer() {
             <textarea value={note} onChange={e => setNote(e.target.value)} className="input-kiki h-16 resize-none"
               placeholder="¿Algo que quieras comentar? (opcional)" />
 
-            <button onClick={handleSubmit} disabled={difficulty === null} className="btn-primary w-full disabled:opacity-40">
+            <button onClick={handleSubmit} disabled={difficulty === null} className="btn-primary w-full disabled:opacity-40 shadow-mint-lg">
               Enviar registro
             </button>
           </div>
@@ -281,7 +295,6 @@ export default function SessionPlayer() {
     );
   }
 
-  // STAGE: session in progress
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
@@ -290,74 +303,151 @@ export default function SessionPlayer() {
       </div>
 
       <div className="flex gap-1 px-4 mb-4">
-        {exercises.map((_, i) => (
-          <div key={i} className={`flex-1 h-1.5 rounded-full transition-colors ${i < currentEx ? 'bg-mint' : i === currentEx ? 'bg-mint-300' : 'bg-muted'}`} />
+        {exercises.map((ex, i) => (
+          <div key={i} onClick={() => { setCurrentEx(i); setCurrentSet(0); }}
+            className={`flex-1 h-1.5 rounded-full transition-colors cursor-pointer ${completedExercises.has(ex.id) ? 'bg-mint' : i === currentEx ? 'bg-mint-300' : 'bg-muted'}`} />
         ))}
       </div>
-      <p className="text-xs text-muted-foreground text-center mb-4">Ejercicio {currentEx + 1} de {exercises.length}</p>
+      <div className="flex justify-center items-center gap-2 mb-4">
+        <p className="text-xs text-muted-foreground">Ejercicio {currentEx + 1} de {exercises.length}</p>
+        {isCurrentExCompleted && (
+          <span className="text-[10px] font-bold text-mint-700 bg-mint-50 px-2 py-0.5 rounded-full border border-mint-200 flex items-center gap-1">
+            <CheckCircle2 size={10} /> Completado
+          </span>
+        )}
+      </div>
 
-      <div className="flex-1 px-4">
+      <div className="flex-1 px-4 overflow-y-auto">
         <AnimatePresence mode="wait">
           <motion.div key={currentEx} initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -50, opacity: 0 }}
             transition={{ duration: 0.3 }} className="card-kiki overflow-hidden">
-            <div className="h-40 rounded-t-xl flex items-center justify-center"
+            <div className="h-32 rounded-t-xl flex items-center justify-center relative"
               style={{ background: `linear-gradient(135deg, ${exercise.thumbnail_color}40, ${exercise.thumbnail_color}20)` }}>
-              <div className="w-16 h-16 rounded-full" style={{ backgroundColor: exercise.thumbnail_color + '60' }} />
+              <div className="w-12 h-12 rounded-full" style={{ backgroundColor: exercise.thumbnail_color + '60' }} />
+              {isCurrentExCompleted && (
+                <div className="absolute inset-0 bg-mint/10 flex items-center justify-center backdrop-blur-[1px]">
+                  <CheckCircle2 size={40} className="text-mint-600 opacity-50" />
+                </div>
+              )}
             </div>
             <div className="p-4">
-              {exercise.target_area && (
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-brand">{exercise.target_area}</span>
-              )}
-              <h3 className="text-lg font-semibold mt-2">{exercise.name}</h3>
-              <div className="grid grid-cols-3 gap-2 mt-3 mb-3">
-                <div className="bg-muted/40 rounded-lg p-2 text-center">
-                  <p className="text-base font-bold">{exercise.sets}</p>
-                  <p className="text-[9px] text-muted-foreground">Series</p>
+              <div className="flex justify-between items-start">
+                <div>
+                  {exercise.target_area && (
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-brand">{exercise.target_area}</span>
+                  )}
+                  <h3 className="text-lg font-bold mt-1 text-navy">{exercise.name}</h3>
                 </div>
-                <div className="bg-muted/40 rounded-lg p-2 text-center">
-                  <p className="text-base font-bold">{exercise.reps}</p>
-                  <p className="text-[9px] text-muted-foreground">Repeticiones</p>
+                {isCurrentExCompleted && <CheckCircle2 size={20} className="text-mint-600" />}
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 mt-4 mb-4">
+                <div className="bg-muted/30 rounded-lg p-2 text-center border border-border/50">
+                  <p className="text-sm font-bold">{exercise.sets}</p>
+                  <p className="text-[9px] text-muted-foreground uppercase">Series</p>
                 </div>
-                <div className="bg-muted/40 rounded-lg p-2 text-center">
-                  <p className="text-base font-bold">{exercise.duration} min</p>
-                  <p className="text-[9px] text-muted-foreground">Duración</p>
+                <div className="bg-muted/30 rounded-lg p-2 text-center border border-border/50">
+                  <p className="text-sm font-bold truncate px-1">{exercise.reps}</p>
+                  <p className="text-[9px] text-muted-foreground uppercase">Reps</p>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-2 text-center border border-border/50">
+                  <p className="text-sm font-bold">{exercise.duration} min</p>
+                  <p className="text-[9px] text-muted-foreground uppercase">Total</p>
                 </div>
               </div>
-              {exercise.description && <p className="text-xs text-muted-foreground leading-relaxed">{exercise.description}</p>}
-              <p className="text-xs text-mint-600 mt-3 font-medium text-center">Serie {currentSet + 1} de {totalSets}</p>
-              <div className="flex gap-2 mt-2 justify-center">
-                {Array.from({ length: totalSets }).map((_, i) => (
-                  <div key={i} className={`w-3 h-3 rounded-full transition-all ${i <= currentSet ? 'bg-mint scale-110' : 'bg-muted'}`} />
-                ))}
+
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {exercise.description}
+                </p>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-border/50 flex flex-col items-center">
+                <p className="text-[10px] font-bold text-mint-600 uppercase tracking-widest mb-2">Progreso de series</p>
+                <div className="flex gap-2.5">
+                  {Array.from({ length: totalSets }).map((_, i) => (
+                    <div key={i} className={`w-3.5 h-3.5 rounded-full transition-all duration-300 ${i <= currentSet ? 'bg-mint shadow-[0_0_8px_rgba(126,237,196,0.6)]' : 'bg-muted'}`} />
+                  ))}
+                </div>
+                <p className="text-[10px] font-medium text-muted-foreground mt-2">Serie {currentSet + 1} de {totalSets}</p>
               </div>
             </div>
           </motion.div>
         </AnimatePresence>
       </div>
 
-      <div className="flex items-center justify-between px-6 py-4">
-        <button onClick={handlePrevExercise} disabled={currentEx === 0}
-          className="flex items-center gap-1 text-sm text-muted-foreground disabled:opacity-30">
-          <ChevronLeft size={18} /> Anterior
-        </button>
-        <button onClick={() => setPlaying(!playing)}
-          className="w-16 h-16 rounded-full bg-mint flex items-center justify-center active:scale-95 transition-transform">
-          {playing ? <Pause size={28} className="text-navy" /> : <Play size={28} className="text-navy ml-1" />}
-        </button>
-        <button onClick={handleNextSet} className="flex items-center gap-1 text-sm font-medium text-mint-600">
-          Siguiente <ChevronRight size={18} />
-        </button>
+      <div className="px-6 py-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <button onClick={handlePrevExercise} disabled={currentEx === 0}
+            className="flex items-center gap-1 text-sm font-bold text-muted-foreground disabled:opacity-30">
+            <ChevronLeft size={20} /> Anterior
+          </button>
+          
+          {isCurrentExCompleted ? (
+            <button 
+              onClick={() => {
+                if (currentEx + 1 < exercises.length) {
+                  setCurrentEx(currentEx + 1);
+                  setCurrentSet(0);
+                }
+              }}
+              className="text-sm font-bold text-mint-700 bg-mint-50 px-4 py-2 rounded-full border border-mint-200"
+            >
+              {currentEx + 1 < exercises.length ? 'Siguiente ejercicio' : 'Revisar sesión'}
+            </button>
+          ) : (
+            <button 
+              onClick={handleNextSet}
+              className="text-sm font-bold text-navy"
+            >
+              {currentSet + 1 < totalSets ? 'Siguiente serie' : 'Última serie'}
+            </button>
+          )}
+          
+          <button 
+            onClick={() => {
+              if (currentEx + 1 < exercises.length) {
+                setCurrentEx(currentEx + 1);
+                setCurrentSet(0);
+              }
+            }} 
+            disabled={currentEx + 1 >= exercises.length}
+            className="flex items-center gap-1 text-sm font-bold text-muted-foreground disabled:opacity-30"
+          >
+            Siguiente <ChevronRight size={20} />
+          </button>
+        </div>
+
+        {!isCurrentExCompleted ? (
+          <button 
+            onClick={handleMarkAsCompleted}
+            className="btn-primary w-full py-4 text-base shadow-mint-lg flex items-center justify-center gap-2"
+          >
+            <CheckCircle2 size={20} /> Marcar como completado
+          </button>
+        ) : allCompleted ? (
+          <button 
+            onClick={() => setStage('survey')}
+            className="w-full py-4 text-base bg-navy text-white rounded-xl font-bold shadow-lg animate-pulse"
+          >
+            Finalizar sesión de hoy
+          </button>
+        ) : (
+          <p className="text-center text-xs font-medium text-muted-foreground py-2 italic">
+            Completá todos los ejercicios para finalizar la sesión
+          </p>
+        )}
       </div>
 
       {showConfirmExit && (
-        <div className="fixed inset-0 bg-foreground/40 flex items-center justify-center z-50 px-6">
+        <div className="fixed inset-0 bg-foreground/40 flex items-center justify-center z-50 px-6 backdrop-blur-sm">
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-            className="bg-card rounded-xl p-6 w-full max-w-[320px] shadow-kiki-lg">
-            <h3 className="font-semibold text-center mb-2">¿Salir de la sesión?</h3>
-            <p className="text-sm text-muted-foreground text-center mb-4">El progreso de hoy no se guardará.</p>
+            className="bg-card rounded-2xl p-6 w-full max-w-[320px] shadow-2xl border border-border">
+            <h3 className="font-bold text-center text-lg mb-2">¿Salir de la sesión?</h3>
+            <p className="text-sm text-muted-foreground text-center mb-6">El progreso de hoy no se guardará en tu historial.</p>
             <div className="flex gap-3">
-              <button onClick={() => setShowConfirmExit(false)} className="btn-secondary flex-1 text-sm">Continuar</button>
-              <button onClick={() => navigate('/cuidadora/home')} className="flex-1 text-sm py-2.5 rounded-[10px] bg-rust/10 text-rust font-medium">Salir</button>
+              <button onClick={() => setShowConfirmExit(false)} className="btn-secondary flex-1 text-sm font-bold">Continuar</button>
+              <button onClick={() => navigate('/cuidadora/home')} className="flex-1 text-sm py-2.5 rounded-xl bg-red-50 text-rust font-bold hover:bg-red-100 transition-colors">Salir</button>
             </div>
           </motion.div>
         </div>

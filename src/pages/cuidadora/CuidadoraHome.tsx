@@ -87,7 +87,7 @@ export default function CuidadoraHome() {
           if (exData) {
             setTodayPlan({
               exercises: exData,
-              totalTime: exData.reduce((s, e) => s + (e.duration || 5), 0)
+              totalTime: exData.reduce((s, e) => s + (Number(e.duration) || 5), 0)
             });
           }
         }
@@ -104,12 +104,12 @@ export default function CuidadoraHome() {
         .lte('completed_at', today + 'T23:59:59')
         .order('completed_at', { descending: true });
 
-      const mainSessionDone = (todaySessions || []).some(s => !s.is_update);
+      const mainSessionDone = (todaySessions || []).some(s => s && !s.is_update);
       setTodayCompleted(mainSessionDone);
 
       // 2. Check for NEW exercises added after the main session
       if (mainSessionDone) {
-        const lastMainSession = todaySessions?.find(s => !s.is_update);
+        const lastMainSession = (todaySessions || []).find(s => s && !s.is_update);
         const lastSessionTime = lastMainSession?.completed_at;
 
         if (lastSessionTime) {
@@ -120,12 +120,7 @@ export default function CuidadoraHome() {
             .eq('active', true)
             .or(`created_at.gt.${lastSessionTime},updated_at.gt.${lastSessionTime}`);
           
-          // Check if these new exercises were already completed in an "update session"
-          const updateSessionsDone = (todaySessions || []).filter(s => s.is_update);
-          // For simplicity, if there are new plans and no update session happened AFTER them, show banner
           if (newPlans && newPlans.length > 0) {
-            // Check if any update session happened after the latest new plan
-            // (Assuming we only show banner if there's pending update)
             setHasUpdateBanner(true);
           }
         }

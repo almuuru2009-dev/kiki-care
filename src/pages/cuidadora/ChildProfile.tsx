@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Send, LogOut, ChevronRight, Edit2, HelpCircle, Shield, Globe, MessageSquarePlus, UserMinus, Save, X, Trash2, AlertTriangle, Hash } from 'lucide-react';
@@ -44,20 +44,58 @@ export default function ChildProfile() {
   const [editName, setEditName] = useState('');
 
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
-  const [showFeedback, setShowFeedback] = useState(false);
-  const [feedbackText, setFeedbackText] = useState('');
-  const [feedbackSent, setFeedbackSent] = useState(false);
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   
 
+  const [savedExercises, setSavedExercises] = useState<any[]>([]);
+  const [activeFilter, setActiveFilter] = useState<{type: string, value: string} | null>(null);
+
   useEffect(() => {
     if (user) {
       loadData();
       setEditName(profile?.name || '');
+      loadSavedExercises();
     }
   }, [user, profile]);
+
+  const loadSavedExercises = async () => {
+    if (!user) return;
+    const { data: favs } = await supabase.from('saved_exercises').select('exercise_id').eq('user_id', user.id);
+    if (!favs || favs.length === 0) { setSavedExercises([]); return; }
+    
+    const ids = favs.map(f => f.exercise_id);
+    
+    const [exRes, commRes] = await Promise.all([
+      supabase.from('exercises').select('*').in('id', ids),
+      supabase.from('community_exercises').select('*').in('id', ids)
+    ]);
+    
+    const combined = [
+      ...(exRes.data || []),
+      ...(commRes.data || []).map(c => ({...c, name: c.clinical_name}))
+    ];
+    setSavedExercises(combined);
+  };
+
+  const filteredExercises = useMemo(() => {
+    if (!activeFilter?.value) return savedExercises;
+    return savedExercises.filter(ex => {
+      const val = activeFilter.value.toLowerCase();
+      if (activeFilter.type === 'area') {
+        return (ex.target_area || ex.area || '').toLowerCase().includes(val);
+      }
+      if (activeFilter.type === 'difficulty') {
+        return (ex.difficulty || '').toLowerCase() === val;
+      }
+      if (activeFilter.type === 'age') {
+        return (ex.age_range || '').toLowerCase().includes(val);
+      }
+      return true;
+    });
+  }, [savedExercises, activeFilter]);
 
   const loadData = async () => {
     if (!user) return;
@@ -155,18 +193,7 @@ export default function ChildProfile() {
     }
   };
 
-  const handleSubmitFeedback = async () => {
-    if (!feedbackText.trim() || !user) return;
-    await supabase.from('feedback').insert({ user_id: user.id, text: feedbackText, type: 'comment' });
-    try {
-      await supabase.functions.invoke('send-feedback', {
-        body: { text: feedbackText, type: 'comment', userEmail: profile?.email || user.email, userName: profile?.name }
-      });
-    } catch {}
-    setFeedbackSent(true);
-    toast.success('Gracias por tu comentario. Lo enviaremos a soporte.kikicare@gmail.com');
-    setTimeout(() => { setShowFeedback(false); setFeedbackSent(false); setFeedbackText(''); }, 2000);
-  };
+
 
   const handleDeleteAccount = async () => {
     if (!user) return;
@@ -341,12 +368,102 @@ export default function ChildProfile() {
           </KikiCard>
         </motion.div>
 
-        {/* Change password */}
+        {/* Saved Exercises */}
         <motion.div variants={stagger.item}>
-          <KikiCard onClick={() => navigate('/change-password')} className="cursor-pointer">
-            <div className="flex items-center justify-between"><span className="text-sm font-medium">Cambiar contraseña</span><ChevronRight size={16} className="text-muted-foreground" /></div>
+          <KikiCard className="!p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xs font-bold text-navy uppercase tracking-widest">Ejercicios guardados</h3>
+              <Heart size={16} className="text-red-500 fill-red-500" />
+            </div>
+
+            {/* Filter Chips */}
+            <div className="flex gap-2 overflow-x-auto pb-3 -mx-1 px-1 scrollbar-hide">
+              {[
+                { id: 'area', label: 'Área', options: ['Miembros inferiores', 'Miembros superiores', 'Tronco y columna', 'Control cefálico', 'Global'] },
+                { id: 'difficulty', label: 'Dificultad', options: ['Suave', 'Moderado', 'Intensivo'] },
+                { id: 'age', label: 'Edad', options: ['0–2 años', '2–5 años', '5–10 años', '10–18 años'] }
+              ].map(cat => (
+                <div key={cat.id} className="relative shrink-0">
+                  <button 
+                    onClick={() => setActiveFilter(activeFilter?.type === cat.id ? null : { type: cat.id, value: '' })}
+                    className={`text-[11px] font-bold px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5
+                      ${activeFilter?.type === cat.id ? 'bg-navy text-white border-navy' : 'bg-white text-muted-foreground border-border'}`}
+                  >
+                    {cat.label}
+                    <ChevronDown size={12} className={`transition-transform ${activeFilter?.type === cat.id ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+              ))}
+              {activeFilter && (
+                <button 
+                  onClick={() => setActiveFilter(null)}
+                  className="text-[10px] font-bold text-rust bg-red-50 px-3 py-1.5 rounded-full shrink-0"
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
+
+            {/* Sub-filters (Values) */}
+            <AnimatePresence>
+              {activeFilter && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex flex-wrap gap-1.5 pb-4 border-b border-border/50 mb-4"
+                >
+                  {[
+                    { id: 'area', options: ['Miembros inferiores', 'Miembros superiores', 'Tronco y columna', 'Control cefálico', 'Global'] },
+                    { id: 'difficulty', options: ['Suave', 'Moderado', 'Intensivo'] },
+                    { id: 'age', options: ['0–2 años', '2–5 años', '5–10 años', '10–18 años'] }
+                  ].find(c => c.id === activeFilter.type)?.options.map(opt => (
+                    <button 
+                      key={opt}
+                      onClick={() => setActiveFilter({ ...activeFilter, value: opt })}
+                      className={`text-[10px] px-2.5 py-1 rounded-md font-bold transition-all
+                        ${activeFilter.value === opt ? 'bg-mint text-navy shadow-sm' : 'bg-muted/50 text-muted-foreground hover:bg-muted'}`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Exercises Grid */}
+            <div className="space-y-3">
+              {filteredExercises.length > 0 ? (
+                filteredExercises.map(ex => (
+                  <div 
+                    key={ex.id} 
+                    onClick={() => navigate(`/cuidadora/exercise/${ex.id}`)}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-muted/20 border border-border/30 active:scale-[0.98] transition-transform"
+                  >
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: (ex.thumbnail_color || '#7EEDC4') + '20' }}>
+                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: ex.thumbnail_color || '#7EEDC4' }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold truncate text-navy">{ex.simple_name || ex.name}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {ex.target_area || ex.area || 'General'} · {ex.difficulty || 'Moderado'}
+                      </p>
+                    </div>
+                    <ChevronRight size={14} className="text-muted-foreground" />
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-xs text-muted-foreground italic">
+                    {activeFilter?.value ? 'No se encontraron ejercicios con ese filtro' : 'Aún no tenés ejercicios guardados.'}
+                  </p>
+                </div>
+              )}
+            </div>
           </KikiCard>
         </motion.div>
+
+        {/* Change password */}
 
         {/* Legal */}
         <motion.div variants={stagger.item}>
@@ -365,12 +482,7 @@ export default function ChildProfile() {
         </motion.div>
 
 
-        {/* Feedback */}
-        <motion.div variants={stagger.item}>
-          <button onClick={() => setShowFeedback(true)} className="w-full text-center py-2 text-sm text-muted-foreground font-medium">
-            <MessageSquarePlus size={14} className="inline mr-1" /> Enviar comentarios
-          </button>
-        </motion.div>
+
 
         {/* Logout */}
         <motion.div variants={stagger.item}>
@@ -405,30 +517,7 @@ export default function ChildProfile() {
         </div>
       )}
 
-      {/* Feedback modal */}
-      {showFeedback && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-6" onClick={() => !feedbackSent && setShowFeedback(false)}>
-          <div className="bg-card rounded-2xl p-6 w-full max-w-[340px] shadow-kiki-lg" onClick={e => e.stopPropagation()}>
-            {feedbackSent ? (
-              <div className="text-center py-4">
-                <p className="text-2xl mb-2">🙏</p>
-                <h3 className="font-bold text-lg">Gracias por tu comentario</h3>
-                <p className="text-xs text-muted-foreground mt-1">Se enviará a soporte.kikicare@gmail.com</p>
-              </div>
-            ) : (
-              <>
-                <h3 className="text-lg font-bold mb-1">Enviar comentarios</h3>
-                <p className="text-xs text-muted-foreground mb-3">Tu mensaje será enviado a soporte.kikicare@gmail.com</p>
-                <textarea className="input-kiki text-sm min-h-[100px] resize-none" placeholder="Escribí tu comentario…" value={feedbackText} onChange={e => setFeedbackText(e.target.value)} />
-                <div className="flex gap-2 mt-3">
-                  <button onClick={handleSubmitFeedback} className="btn-primary flex-1 text-sm" disabled={!feedbackText.trim()}>Enviar</button>
-                  <button onClick={() => setShowFeedback(false)} className="btn-ghost flex-1 text-sm">Cancelar</button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+
 
       {/* Delete account confirmation */}
       {showDeleteConfirm && (

@@ -22,6 +22,7 @@ interface PatientInfo {
   status: string;
   adherencePercent: number;
   riskLevel: 'BAJO' | 'MODERADO' | 'ALTO';
+  riskScore: number;
   lastSessionDaysAgo: number;
 }
 
@@ -59,63 +60,95 @@ export default function PatientList() {
 
   const loadPatients = async () => {
     if (!user) return;
-    const { data: links } = await supabase
-      .from('therapist_caregiver_links').select('*')
-      .eq('therapist_id', user.id).in('status', ['active', 'pending', 'archived']);
-    if (!links) { setLoading(false); return; }
+    try {
+      const { data: links } = await supabase
+        .from('therapist_caregiver_links').select('*')
+        .eq('therapist_id', user.id).in('status', ['active', 'pending', 'archived']);
+      
+      if (!links) { setLoading(false); return; }
 
-    const childIds = links.map(l => l.child_id).filter(Boolean) as string[];
-    const caregiverIds = links.map(l => l.caregiver_id).filter(Boolean) as string[];
+      const childIds = links.map(l => l.child_id).filter(Boolean) as string[];
+      const caregiverIds = links.map(l => l.caregiver_id).filter(Boolean) as string[];
 
-    const [childrenRes, profilesRes, sessionsRes] = await Promise.all([
-      childIds.length > 0 ? supabase.from('children').select('*').in('id', childIds) : { data: [] },
-      caregiverIds.length > 0 ? supabase.from('profiles').select('id, name').in('id', caregiverIds) : { data: [] },
-      childIds.length > 0 ? supabase.from('sessions').select('id, child_id, completed_at').in('child_id', childIds) : { data: [] },
-    ]);
+      const [childrenRes, profilesRes, sessionsRes] = await Promise.all([
+        childIds.length > 0 ? supabase.from('children').select('*').in('id', childIds) : { data: [] },
+        caregiverIds.length > 0 ? supabase.from('profiles').select('id, name').in('id', caregiverIds) : { data: [] },
+        childIds.length > 0 ? supabase.from('sessions').select('id, child_id, completed_at').in('child_id', childIds) : { data: [] },
+      ]);
 
-    const childrenMap = new Map((childrenRes.data || []).map(c => [c.id, c]));
-    const profileMap = new Map((profilesRes.data || []).map(p => [p.id, p]));
-    const allSessions = sessionsRes.data || [];
-    const now = new Date();
-    const twoWeeksAgo = new Date(now.getTime() - 14 * 86400000);
+      const childrenMap = new Map((childrenRes.data || []).map(c => [c.id, c]));
+      const profileMap = new Map((profilesRes.data || []).map(p => [p.id, p]));
+      const allSessions = sessionsRes.data || [];
+      const now = new Date();
+      const twoWeeksAgo = new Date(now.getTime() - 14 * 86400000);
 
-    const mapped: PatientInfo[] = links.map(link => {
-      const child = link.child_id ? childrenMap.get(link.child_id) : null;
-      const caregiver = link.caregiver_id ? profileMap.get(link.caregiver_id) : null;
-      const childSessions = allSessions.filter(s => s.child_id === link.child_id);
-      const recentSessions = childSessions.filter(s => new Date(s.completed_at) >= twoWeeksAgo);
-      const adherencePercent = Math.min(100, Math.round((recentSessions.length / 10) * 100));
-      const lastSession = childSessions.sort((a, b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime())[0];
-      const lastSessionDaysAgo = lastSession ? Math.floor((now.getTime() - new Date(lastSession.completed_at).getTime()) / 86400000) : 30;
+      const mapped: PatientInfo[] = (links || []).map(link => {
+        const child = link.child_id ? childrenMap.get(link.child_id) : null;
+        const caregiver = link.caregiver_id ? profileMap.get(link.caregiver_id) : null;
+        
+        const childSessions = allSessions.filter(s => s.child_id === link.child_id);
+        const recentSessions = childSessions.filter(s => {
+          if (!s.completed_at) return false;
+          try {
+            return new Date(s.completed_at) >= twoWeeksAgo;
+          } catch (e) {
+            return false;
+          }
+        });
+        
+        const adherencePercent = Math.min(100, Math.round((recentSessions.length / 10) * 100));
+        
+        const lastSession = [...childSessions].sort((a, b) => {
+          const dateA = a.completed_at ? new Date(a.completed_at).getTime() : 0;
+          const dateB = b.completed_at ? new Date(b.completed_at).getTime() : 0;
+          return dateB - dateA;
+        })[0];
+        
+        const lastSessionDaysAgo = lastSession && lastSession.completed_at 
+          ? Math.floor((now.getTime() - new Date(lastSession.completed_at).getTime()) / 86400000) 
+          : 30;
+        
+        const pattern: FamilyPattern = {
+          patientId: link.id,
+          baselineFrequency: 5,
+          baselineHour: 10,
+          recentFrequency: recentSessions.length / 2,
+          lastSessionDaysAgo,
+          avgDurationMinutes: 15,
+          baselineDurationMinutes: 20,
+          responseLatencyHours: lastSessionDaysAgo > 3 ? 48 : 6,
+        };
+        
+        let kaeResult;
+        try {
+          kaeResult = calculateRisk(pattern);
+        } catch (err) {
+          console.error("KAE Error:", err);
+          kaeResult = { riskLevel: 'BAJO' as const, riskScore: 0 };
+        }
 
-      const pattern: FamilyPattern = {
-        patientId: link.id,
-        baselineFrequency: 5,
-        baselineHour: 10,
-        recentFrequency: recentSessions.length / 2,
-        lastSessionDaysAgo,
-        avgDurationMinutes: 15,
-        baselineDurationMinutes: 20,
-        responseLatencyHours: lastSessionDaysAgo > 3 ? 48 : 6,
-      };
-      const kaeResult = calculateRisk(pattern);
-
-      return {
-        linkId: link.id, childId: link.child_id,
-        childName: child?.name || 'Pendiente',
-        caregiverName: caregiver?.name || link.caregiver_email,
-        caregiverEmail: link.caregiver_email,
-        diagnosis: child?.diagnosis || null,
-        gmfcs: child?.gmfcs || null,
-        age: child?.age || null,
-        status: link.status,
-        adherencePercent,
-        riskLevel: kaeResult.riskLevel,
-        lastSessionDaysAgo,
-      };
-    });
-    setPatients(mapped);
-    setLoading(false);
+        return {
+          linkId: link.id, 
+          childId: link.child_id || null,
+          childName: child?.name || 'Pendiente',
+          caregiverName: caregiver?.name || link.caregiver_email || 'Sin nombre',
+          caregiverEmail: link.caregiver_email || '',
+          diagnosis: child?.diagnosis || null,
+          gmfcs: child?.gmfcs || null,
+          age: child?.age || null,
+          status: link.status || 'pending',
+          adherencePercent,
+          riskLevel: kaeResult.riskLevel,
+          riskScore: kaeResult.riskScore,
+          lastSessionDaysAgo,
+        };
+      });
+      setPatients(mapped);
+    } catch (error) {
+      console.error('Error loading patients:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const activePatients = patients.filter(p => p.status === 'active' || p.status === 'pending');
@@ -138,22 +171,38 @@ export default function PatientList() {
   const activeFilterCount = [gmfcsFilter !== null, adherenceFilter !== 'all', riskFilter !== 'all'].filter(Boolean).length;
 
   const handleGenerateCode = async () => {
+    if (!user) {
+      toast.error('No se detectó sesión de usuario');
+      return;
+    }
     setInviteSending(true);
     try {
-      const code = `KIKI-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-      const { data, error } = await supabase.from('invitations').insert({
-        code,
-        kinesio_id: user!.id,
-      }).select().single();
+      // Código de 6 caracteres aleatorios
+      const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const code = `KIKI-${randomStr}`;
+      
+      console.log('DEBUG: Generando código para kinesio_id:', user.id);
 
-      if (error) throw error;
+      const { error } = await supabase
+        .from('kiki_invitations')
+        .insert({
+          code: code,
+          kinesio_id: user.id,
+          status: 'pending'
+        });
+
+      if (error) {
+        console.error('DEBUG: Supabase Insert Error:', error);
+        throw error;
+      }
       
       setGeneratedCode(code);
       setInviteSent(true);
       toast.success('Código generado con éxito');
     } catch (err: any) {
-      console.error('Error generating code:', err);
-      toast.error('Error al generar el código');
+      console.error('DEBUG: Error capturado en handleGenerateCode:', err);
+      const msg = err.message || 'Error desconocido';
+      toast.error(`Error: ${msg}`);
     } finally {
       setInviteSending(false);
     }

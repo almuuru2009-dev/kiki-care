@@ -18,9 +18,7 @@ export default function KineProfile() {
   const [editInst, setEditInst] = useState(profile?.institution || '');
   const [editMatricula, setEditMatricula] = useState(profile?.matricula || '');
   const [editSpecialty, setEditSpecialty] = useState(profile?.specialty || '');
-  const [showFeedback, setShowFeedback] = useState(false);
-  const [feedbackText, setFeedbackText] = useState('');
-  const [feedbackSent, setFeedbackSent] = useState(false);
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showMAAInfo, setShowMAAInfo] = useState(false);
@@ -84,21 +82,7 @@ export default function KineProfile() {
     }
   };
 
-  const handleSubmitFeedback = async () => {
-    if (!feedbackText.trim() || !user) return;
-    await supabase.from('feedback').insert({ user_id: user.id, text: feedbackText, type: 'comment' });
-    
-    // Also try sending via edge function
-    try {
-      await supabase.functions.invoke('send-feedback', {
-        body: { text: feedbackText, type: 'comment', userEmail: profile?.email || user.email, userName: profile?.name }
-      });
-    } catch {}
-    
-    setFeedbackSent(true);
-    toast.success('Gracias por tu comentario. Lo enviaremos a soporte.kikicare@gmail.com');
-    setTimeout(() => { setShowFeedback(false); setFeedbackSent(false); setFeedbackText(''); }, 2000);
-  };
+
 
   const handleDeleteAccount = async () => {
     if (!user) return;
@@ -294,12 +278,7 @@ export default function KineProfile() {
         </motion.div>
 
 
-        {/* Feedback */}
-        <motion.div variants={stagger.item}>
-          <button onClick={() => setShowFeedback(true)} className="w-full text-center py-2 text-sm text-muted-foreground font-medium">
-            <MessageSquarePlus size={14} className="inline mr-1" /> Enviar comentarios
-          </button>
-        </motion.div>
+
 
         {/* Logout */}
         <motion.div variants={stagger.item}>
@@ -320,31 +299,7 @@ export default function KineProfile() {
 
       </motion.div>
 
-      {/* Feedback modal */}
-      {showFeedback && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-6" onClick={() => !feedbackSent && setShowFeedback(false)}>
-          <div className="bg-card rounded-2xl p-6 w-full max-w-[340px] shadow-kiki-lg" onClick={e => e.stopPropagation()}>
-            {feedbackSent ? (
-              <div className="text-center py-4">
-                <p className="text-2xl mb-2">🙏</p>
-                <h3 className="font-bold text-lg">Gracias por tu comentario</h3>
-                <p className="text-xs text-muted-foreground mt-1">Se enviará a soporte.kikicare@gmail.com</p>
-              </div>
-            ) : (
-              <>
-                <h3 className="text-lg font-bold mb-1">Enviar comentarios</h3>
-                <p className="text-xs text-muted-foreground mb-3">Tu mensaje será enviado a soporte.kikicare@gmail.com</p>
-                <textarea className="input-kiki text-sm min-h-[100px] resize-none" placeholder="Escribí tu comentario…"
-                  value={feedbackText} onChange={e => setFeedbackText(e.target.value)} />
-                <div className="flex gap-2 mt-3">
-                  <button onClick={handleSubmitFeedback} className="btn-primary flex-1 text-sm" disabled={!feedbackText.trim()}>Enviar</button>
-                  <button onClick={() => setShowFeedback(false)} className="btn-ghost flex-1 text-sm">Cancelar</button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+
 
       {/* Delete account confirmation */}
       {showDeleteConfirm && (
