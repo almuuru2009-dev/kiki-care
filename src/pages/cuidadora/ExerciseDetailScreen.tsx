@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, Play, Clock, Repeat, ChevronDown, ChevronUp, 
   Info, AlertTriangle, CheckCircle2, Video, Heart, ShieldAlert,
-  Target, GraduationCap, Layers, Sparkles
+  Target, GraduationCap, Layers, Sparkles, Plus, Edit, Trash2, UserPlus, BookmarkMinus, MoreVertical, Search
 } from 'lucide-react';
 import { KikiCard } from '@/components/kiki/KikiComponents';
 import { supabase } from '@/integrations/supabase/client';
@@ -41,13 +41,26 @@ interface ExerciseDetail {
 
 export default function ExerciseDetailScreen() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuthContext();
+  const { user, profile } = useAuthContext();
   const navigate = useNavigate();
   const [exercise, setExercise] = useState<ExerciseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [showVideo, setShowVideo] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  
+  // Therapist state
+  const isKine = profile?.role === 'kinesiologist';
+  const [isOwn, setIsOwn] = useState(false);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignStep, setAssignStep] = useState<1 | 2>(1);
+  const [assignPatient, setAssignPatient] = useState<any>(null);
+  const [assignDate, setAssignDate] = useState(new Date().toISOString().split('T')[0]);
+  const [existingExercisesOnDate, setExistingExercisesOnDate] = useState<any[]>([]);
+  const [patientSearch, setPatientSearch] = useState('');
+  const [assigningTo, setAssigningTo] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState(false);
 
   useEffect(() => {
     if (id) loadExercise();
@@ -78,12 +91,73 @@ export default function ExerciseDetailScreen() {
         }
       }
 
-      if (data) setExercise(data);
+      if (data) {
+        setExercise(data);
+        setIsOwn(data.created_by === user?.id);
+      }
     } catch (err) {
       console.error('Error loading exercise:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    if (isKine) loadPatients();
+  }, [isKine]);
+
+  useEffect(() => {
+    if (showAssignModal && assignPatient && assignDate) {
+      loadExistingExercises();
+    }
+  }, [showAssignModal, assignPatient, assignDate]);
+
+  const loadPatients = async () => {
+    if (!user) return;
+    const { data: links } = await supabase.from('therapist_caregiver_links').select('id, child_id').eq('therapist_id', user.id).eq('status', 'active');
+    if (links && links.length > 0) {
+      const childIds = links.map(l => l.child_id).filter(Boolean) as string[];
+      const { data: children } = await supabase.from('children').select('id, name').in('id', childIds);
+      const childMap = new Map((children || []).map(c => [c.id, c.name]));
+      setPatients(links.filter(l => l.child_id).map(l => ({
+        id: l.child_id!,
+        name: childMap.get(l.child_id!) || 'Paciente'
+      })));
+    }
+  };
+
+  const loadExistingExercises = async () => {
+    if (!assignPatient || !assignDate) return;
+    const dayOfWeek = new Date(assignDate).getDay();
+    const { data } = await supabase.from('treatment_plans').select('exercise_id, exercises(name)').eq('child_id', assignPatient.id).eq('active', true).contains('day_of_week', [dayOfWeek]);
+    setExistingExercisesOnDate(data || []);
+  };
+
+  const handleAssign = async () => {
+    if (!user || !id || !assignPatient) return;
+    setAssigningTo(assignPatient.id);
+    const dayOfWeek = new Date(assignDate).getDay();
+    const { error } = await supabase.from('treatment_plans').insert({
+      child_id: assignPatient.id,
+      therapist_id: user.id,
+      exercise_id: id,
+      day_of_week: [dayOfWeek],
+      active: true,
+    });
+    if (error) toast.error('Error: ' + error.message);
+    else {
+      toast.success(`Asignado a ${assignPatient.name}`);
+      setShowAssignModal(false);
+    }
+    setAssigningTo(null);
+  };
+
+  const handleDelete = async () => {
+    if (!user || !id) return;
+    await supabase.from('treatment_plans').delete().eq('exercise_id', id);
+    await supabase.from('exercises').delete().eq('id', id).eq('created_by', user.id);
+    toast.success('Ejercicio eliminado');
+    navigate(-1);
   };
 
   const checkSavedStatus = async () => {
@@ -372,6 +446,111 @@ export default function ExerciseDetailScreen() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Action Bar (Therapist only) */}
+      {isKine && (
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border z-40 max-w-[420px] mx-auto flex gap-2 shadow-lg">
+          {isOwn ? (
+            <>
+              <button onClick={() => navigate(`/kine/exercises/edit/${id}`)} className="flex-1 btn-secondary text-xs flex items-center justify-center gap-1.5 py-3.5">
+                <Edit size={14} /> Editar
+              </button>
+              <button onClick={() => setShowAssignModal(true)} className="flex-1 btn-primary text-xs flex items-center justify-center gap-1.5 py-3.5">
+                <UserPlus size={14} /> Asignar
+              </button>
+              <button onClick={() => setDeleteTarget(true)} className="w-12 btn-ghost text-rust flex items-center justify-center bg-red-50 border border-red-100 rounded-xl">
+                <Trash2 size={16} />
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={toggleSave} className={`flex-1 btn-secondary text-xs flex items-center justify-center gap-1.5 py-3.5 ${isSaved ? 'text-rust' : ''}`}>
+                {isSaved ? <><BookmarkMinus size={14} /> Quitar</> : <><Heart size={14} /> Guardar</>}
+              </button>
+              <button onClick={() => setShowAssignModal(true)} className="flex-[2] btn-primary text-xs flex items-center justify-center gap-1.5 py-3.5">
+                <UserPlus size={14} /> Asignar a paciente
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Assignment Modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-navy/40 backdrop-blur-sm flex items-end justify-center z-[70]">
+          <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} className="bg-card rounded-t-3xl p-6 w-full max-w-[420px] shadow-2xl border-t border-border">
+            {assignStep === 1 ? (
+              <>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="font-bold text-navy">Elegir paciente</h3>
+                  <button onClick={() => setShowAssignModal(false)} className="p-2 rounded-full bg-muted/50"><X size={18} /></button>
+                </div>
+                <div className="relative mb-4">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input className="input-kiki text-sm pl-10" placeholder="Buscar paciente…" value={patientSearch} onChange={e => setPatientSearch(e.target.value)} />
+                </div>
+                <div className="space-y-2 max-h-[40vh] overflow-y-auto scrollbar-hide pr-1">
+                  {patients.filter(p => p.name.toLowerCase().includes(patientSearch.toLowerCase())).map(p => (
+                    <button key={p.id} onClick={() => { setAssignPatient(p); setAssignStep(2); }}
+                      className="w-full text-left p-3 rounded-xl bg-muted/30 hover:bg-mint-50/50 transition-colors flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-mint text-navy font-bold flex items-center justify-center">{p.name[0]}</div>
+                      <span className="font-bold text-navy text-sm">{p.name}</span>
+                    </button>
+                  ))}
+                  {patients.length === 0 && <p className="text-center text-xs text-muted-foreground py-8">Sin pacientes activos.</p>}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-6">
+                  <button onClick={() => setAssignStep(1)} className="p-2 rounded-full bg-muted/50 text-muted-foreground"><ArrowLeft size={18} /></button>
+                  <h3 className="font-bold text-navy text-sm">Agregar al plan de {assignPatient?.name}</h3>
+                </div>
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Fecha</label>
+                    <input type="date" value={assignDate} onChange={e => setAssignDate(e.target.value)} className="input-kiki text-sm font-bold" />
+                  </div>
+                  <div className="p-4 rounded-2xl bg-mint-50/30 border border-mint-100/50">
+                    <p className="text-[10px] font-bold text-mint-700 uppercase mb-2">Ya planificados:</p>
+                    {existingExercisesOnDate.length > 0 ? (
+                      <div className="space-y-1">
+                        {existingExercisesOnDate.map((ex, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-xs font-medium text-navy">
+                            <CheckCircle2 size={12} className="text-mint-600" /> {ex.exercises?.name}
+                          </div>
+                        ))}
+                      </div>
+                    ) : <p className="text-[10px] text-muted-foreground italic">Libre para esta fecha.</p>}
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowAssignModal(false)} className="btn-ghost flex-1 font-bold text-sm">Cancelar</button>
+                  <button onClick={handleAssign} disabled={!!assigningTo} className="btn-primary flex-[2] py-4 text-sm font-bold shadow-mint-lg">
+                    {assigningTo ? 'Asignando…' : 'Agregar al plan'}
+                  </button>
+                </div>
+              </>
+            )}
+          </motion.div>
+        </div>
+      )}
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-navy/60 backdrop-blur-sm flex items-center justify-center z-[70] px-6">
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-card rounded-2xl p-6 w-full max-w-[320px] shadow-2xl">
+            <h3 className="font-bold text-center text-navy mb-2">¿Eliminar este ejercicio?</h3>
+            <p className="text-xs text-muted-foreground text-center mb-6">
+              Esta acción no se puede deshacer. Se eliminará de planes futuros de pacientes activos.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteTarget(false)} className="btn-ghost flex-1 text-sm">Cancelar</button>
+              <button onClick={handleDelete} className="flex-1 py-3 rounded-xl bg-rust text-white font-bold text-sm">Eliminar</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

@@ -158,7 +158,7 @@ export default function EditExerciseScreen() {
 
       if (error) throw error;
       toast.success('Ejercicio actualizado');
-      navigate(-1);
+      navigate(`/kine/exercise/${id}`, { replace: true });
     } catch (e: any) {
       toast.error('Error: ' + e.message);
     }

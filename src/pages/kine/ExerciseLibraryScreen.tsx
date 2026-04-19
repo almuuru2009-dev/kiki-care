@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, X, Star, Heart, Edit, Trash2, Users, Play } from 'lucide-react';
+import { Plus, Search, X, Star, Heart, Edit, Trash2, Users, Play, MoreVertical, UserPlus, BookmarkMinus } from 'lucide-react';
 import { KikiCard } from '@/components/kiki/KikiComponents';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
@@ -9,13 +9,12 @@ import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-const tabs = ['Mis ejercicios', 'Comunidad', 'Protocolos', 'Favoritos'];
+const tabs = ['Propios', 'Guardados', 'Comunidad'];
 
 const tabDescriptions: Record<string, string> = {
-  'Mis ejercicios': 'Ejercicios que creaste para tu práctica clínica.',
+  'Propios': 'Ejercicios que creaste para tu práctica clínica.',
+  'Guardados': 'Ejercicios de la comunidad que guardaste para acceder rápido.',
   'Comunidad': 'Ejercicios compartidos por terapeutas de toda Argentina.',
-  'Protocolos': 'Agrupaciones de ejercicios para aplicar a pacientes.',
-  'Favoritos': 'Ejercicios de la comunidad que guardaste para acceder rápido.',
 };
 
 const evidenceBadgeColors: Record<string, string> = {
@@ -130,14 +129,52 @@ export default function ExerciseLibraryScreen() {
   const [selectedMyEx, setSelectedMyEx] = useState<MyExercise | null>(null);
   const [loading, setLoading] = useState(true);
   const [evidenceFilter, setEvidenceFilter] = useState<string | null>(null);
-  // Assign to patient
+  // Context menu
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  // Delete confirm dialog
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  // Assign modal (two steps)
   const [showAssignModal, setShowAssignModal] = useState<string | null>(null); // exercise_id
+  const [assignStep, setAssignStep] = useState<1 | 2>(1);
+  const [assignPatient, setAssignPatient] = useState<PatientOption | null>(null);
   const [patients, setPatients] = useState<PatientOption[]>([]);
   const [assigningTo, setAssigningTo] = useState<string | null>(null);
+  const [patientSearch, setPatientSearch] = useState('');
+  const [assignDate, setAssignDate] = useState(new Date().toISOString().split('T')[0]);
+  const [existingExercisesOnDate, setExistingExercisesOnDate] = useState<any[]>([]);
+
+  const openAssign = (exerciseId: string) => {
+    setShowAssignModal(exerciseId);
+    setAssignStep(1);
+    setAssignPatient(null);
+    setPatientSearch('');
+    setOpenMenuId(null);
+  };
 
   useEffect(() => {
     if (user) loadData();
   }, [user]);
+
+  useEffect(() => {
+    if (showAssignModal && assignPatient && assignDate) {
+      loadExistingExercises();
+    }
+  }, [showAssignModal, assignPatient, assignDate]);
+
+  const loadExistingExercises = async () => {
+    if (!assignPatient || !assignDate) return;
+    const dateObj = new Date(assignDate);
+    const dayOfWeek = dateObj.getDay(); // 0 is Sunday
+    
+    const { data } = await supabase
+      .from('treatment_plans')
+      .select('exercise_id, exercises(name)')
+      .eq('child_id', assignPatient.childId)
+      .eq('active', true)
+      .contains('day_of_week', [dayOfWeek]);
+    
+    setExistingExercisesOnDate(data || []);
+  };
 
   const loadData = async () => {
     if (!user) return;
@@ -201,12 +238,12 @@ export default function ExerciseLibraryScreen() {
   };
 
   const handleDeleteExercise = async (exId: string) => {
-    if (!confirm('¿Eliminar este ejercicio? Se quitará de todos los planes.')) return;
     await supabase.from('treatment_plans').delete().eq('exercise_id', exId);
     await supabase.from('protocol_exercises').delete().eq('exercise_id', exId);
     await supabase.from('exercises').delete().eq('id', exId);
     setMyExercises(prev => prev.filter(e => e.id !== exId));
     setSelectedMyEx(null);
+    setDeleteTarget(null);
     toast.success('Ejercicio eliminado');
   };
 
@@ -216,23 +253,28 @@ export default function ExerciseLibraryScreen() {
     toast.success('Ejercicio compartido a la comunidad');
   };
 
-  const handleAssignExercise = async (exerciseId: string, childId: string) => {
-    if (!user) return;
-    setAssigningTo(childId);
+  const handleAssignExercise = async () => {
+    if (!user || !showAssignModal || !assignPatient) return;
+    setAssigningTo(assignPatient.childId);
+    
+    const dateObj = new Date(assignDate);
+    const dayOfWeek = dateObj.getDay();
+
     const { error } = await supabase.from('treatment_plans').insert({
-      child_id: childId,
+      child_id: assignPatient.childId,
       therapist_id: user.id,
-      exercise_id: exerciseId,
-      day_of_week: [1, 2, 3, 4, 5],
+      exercise_id: showAssignModal,
+      day_of_week: [dayOfWeek],
       active: true,
     });
+    
     if (error) {
-      toast.error('Error al asignar');
+      toast.error('Error al asignar: ' + error.message);
     } else {
-      toast.success('Ejercicio asignado al paciente');
+      toast.success(`Ejercicio agregado al plan de ${assignPatient.childName}`);
+      setShowAssignModal(null);
     }
     setAssigningTo(null);
-    setShowAssignModal(null);
   };
 
   const handleDeleteProtocol = async (protoId: string) => {
@@ -297,7 +339,7 @@ export default function ExerciseLibraryScreen() {
           </div>
         ) : (
           <>
-            {/* Mis ejercicios */}
+            {/* Propios */}
             {activeTab === 0 && (
               filteredMyExercises.length === 0 ? (
                 <div className="flex flex-col items-center py-12 text-center">
@@ -309,107 +351,130 @@ export default function ExerciseLibraryScreen() {
               ) : (
                 <div className="space-y-2">
                   {filteredMyExercises.map(ex => (
-                    <KikiCard key={ex.id} onClick={() => navigate(`/kine/exercise/${ex.id}`)} className="cursor-pointer">
-                      <div className="flex items-center gap-3">
+                    <KikiCard key={ex.id} className="cursor-pointer relative">
+                      <div className="flex items-center gap-3" onClick={() => navigate(`/kine/exercise/${ex.id}`)}>
                         <div className="w-10 h-10 rounded-lg bg-mint-50 flex items-center justify-center text-xl">🏋️</div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{ex.name}</p>
                           <p className="text-[10px] text-muted-foreground">{ex.target_area || 'General'} · {ex.duration || 5} min · {ex.sets || 3} series</p>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          {ex.video_url && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-mint-100 text-mint-700">📹</span>}
-                          {ex.is_community && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-brand">🌐</span>}
-                        </div>
                       </div>
+                      {/* Three-dot menu for own exercises */}
+                      <button onClick={e => { e.stopPropagation(); setOpenMenuId(openMenuId === ex.id ? null : ex.id); }}
+                        className="absolute top-2 right-2 p-1 rounded-full hover:bg-muted" aria-label="Opciones">
+                        <MoreVertical size={15} className="text-muted-foreground" />
+                      </button>
+                      {openMenuId === ex.id && (
+                        <div className="absolute top-8 right-2 z-50 bg-card border border-border rounded-xl shadow-lg py-1 min-w-[170px]">
+                          <button onClick={() => { setOpenMenuId(null); navigate(`/kine/exercise/${ex.id}`); }}
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2">
+                            <Play size={13} /> Ver detalle
+                          </button>
+                          <button onClick={() => { setOpenMenuId(null); navigate(`/kine/exercises/edit/${ex.id}`); }}
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2">
+                            <Edit size={13} /> Editar
+                          </button>
+                          <button onClick={() => { setOpenMenuId(null); openAssign(ex.id); }}
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2">
+                            <UserPlus size={13} /> Asignar a paciente
+                          </button>
+                          <div className="border-t border-border my-1" />
+                          <button onClick={() => { setOpenMenuId(null); setDeleteTarget(ex.id); }}
+                            className="w-full text-left px-4 py-2 text-sm text-rust hover:bg-red-50 flex items-center gap-2">
+                            <Trash2 size={13} /> Eliminar
+                          </button>
+                        </div>
+                      )}
                     </KikiCard>
                   ))}
                 </div>
               )
             )}
 
-            {/* Comunidad */}
+            {/* Guardados */}
             {activeTab === 1 && (
+              favoriteExercises.length === 0 ? (
+                <div className="flex flex-col items-center py-12 text-center">
+                  <Heart size={32} className="text-muted-foreground mb-3" />
+                  <h3 className="font-semibold">Sin guardados</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Guardá ejercicios de la comunidad para tenerlos a mano.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {favoriteExercises.map(item => (
+                    <div key={item.id} className="relative">
+                      <CommunityCard item={item} isFav={true}
+                        onToggleFav={() => toggleFavorite(item.id)} onClick={() => navigate(`/kine/exercise/${item.id}`)} />
+                      <button onClick={e => { e.stopPropagation(); setOpenMenuId(openMenuId === `f-${item.id}` ? null : `f-${item.id}`); }}
+                        className="absolute bottom-2 right-2 p-1 rounded-full bg-muted/80 hover:bg-muted" aria-label="Opciones">
+                        <MoreVertical size={12} className="text-muted-foreground" />
+                      </button>
+                      {openMenuId === `f-${item.id}` && (
+                        <div className="absolute bottom-8 right-2 z-50 bg-card border border-border rounded-xl shadow-lg py-1 min-w-[170px]">
+                          <button onClick={() => { setOpenMenuId(null); navigate(`/kine/exercise/${item.id}`); }}
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2">
+                            <Play size={13} /> Ver detalle
+                          </button>
+                          <button onClick={() => { setOpenMenuId(null); openAssign(item.id); }}
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2">
+                            <UserPlus size={13} /> Asignar a paciente
+                          </button>
+                          <button onClick={() => { setOpenMenuId(null); toggleFavorite(item.id); }}
+                            className="w-full text-left px-4 py-2 text-sm text-rust hover:bg-red-50 flex items-center gap-2">
+                            <BookmarkMinus size={13} /> Quitar de guardados
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+            {/* Comunidad */}
+            {activeTab === 2 && (
               <div className="space-y-3">
                 <KikiCard className="bg-gradient-to-r from-mint-50 to-blue-50">
                   <h3 className="text-sm font-semibold">Comunidad KikiCare</h3>
                   <p className="text-[10px] text-muted-foreground mt-0.5">Ejercicios compartidos por terapeutas de toda Argentina.</p>
-                  <div className="flex gap-4 mt-2">
-                    <div className="text-center"><p className="font-bold text-sm">{communityCount}</p><p className="text-[9px] text-muted-foreground">ejercicios</p></div>
-                    <div className="text-center"><p className="font-bold text-sm">{authorCount}</p><p className="text-[9px] text-muted-foreground">terapeutas</p></div>
-                  </div>
                 </KikiCard>
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
                   {['Guía clínica', 'Práctica común', 'Adaptación'].map(ev => (
                     <button key={ev} onClick={() => setEvidenceFilter(evidenceFilter === ev ? null : ev)}
-                      className={`text-[10px] px-2 py-1 rounded-full font-medium transition-colors ${evidenceFilter === ev ? evidenceBadgeColors[ev] : 'bg-muted text-muted-foreground'}`}>
+                      className={`text-[10px] px-3 py-1 rounded-full font-medium transition-colors whitespace-nowrap ${evidenceFilter === ev ? evidenceBadgeColors[ev] : 'bg-muted text-muted-foreground'}`}>
                       {ev}
                     </button>
                   ))}
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {filteredCommunity.map(item => (
-                    <CommunityCard key={item.id} item={item} isFav={favoriteIds.has(item.id)}
-                      onToggleFav={() => toggleFavorite(item.id)} onClick={() => navigate(`/kine/exercise/${item.id}`)} />
-                  ))}
-                </div>
-                {filteredCommunity.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-6">No se encontraron ejercicios</p>
-                )}
-              </div>
-            )}
-
-            {/* Protocolos */}
-            {activeTab === 2 && (
-              <div className="space-y-3">
-                <div className="flex justify-end">
-                  <button onClick={() => navigate('/kine/protocols/create')} className="btn-secondary text-xs py-1.5 px-3">
-                    <Plus size={12} className="inline mr-1" /> Nuevo protocolo
-                  </button>
-                </div>
-                {protocols.length === 0 ? (
-                  <div className="flex flex-col items-center py-8 text-center">
-                    <p className="text-3xl mb-3">📋</p>
-                    <h3 className="font-semibold">Sin protocolos aún</h3>
-                    <p className="text-sm text-muted-foreground mt-1">Agrupá ejercicios en protocolos para asignarlos rápido</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {protocols.map(proto => (
-                      <KikiCard key={proto.id} className="relative">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-xl">📋</div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{proto.name}</p>
-                            <p className="text-[10px] text-muted-foreground">{proto.exerciseCount} ejercicios · {proto.frequency || 'Sin frecuencia'}</p>
-                            {proto.description && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{proto.description}</p>}
-                          </div>
-                          <button onClick={() => handleDeleteProtocol(proto.id)} className="text-muted-foreground hover:text-rust p-1">
-                            <Trash2 size={14} />
+                    <div key={item.id} className="relative">
+                      <CommunityCard item={item} isFav={favoriteIds.has(item.id)}
+                        onToggleFav={() => toggleFavorite(item.id)} onClick={() => navigate(`/kine/exercise/${item.id}`)} />
+                      <button onClick={e => { e.stopPropagation(); setOpenMenuId(openMenuId === `c-${item.id}` ? null : `c-${item.id}`); }}
+                        className="absolute bottom-2 right-2 p-1 rounded-full bg-muted/80 hover:bg-muted" aria-label="Opciones">
+                        <MoreVertical size={12} className="text-muted-foreground" />
+                      </button>
+                      {openMenuId === `c-${item.id}` && (
+                        <div className="absolute bottom-8 right-2 z-50 bg-card border border-border rounded-xl shadow-lg py-1 min-w-[170px]">
+                          <button onClick={() => { setOpenMenuId(null); navigate(`/kine/exercise/${item.id}`); }}
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2">
+                            <Play size={13} /> Ver detalle
+                          </button>
+                          <button onClick={() => { setOpenMenuId(null); toggleFavorite(item.id); }}
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2">
+                            <Heart size={13} className={favoriteIds.has(item.id) ? 'fill-red-500 text-red-500' : ''} /> {favoriteIds.has(item.id) ? 'Quitar de favoritos' : 'Guardar en guardados'}
+                          </button>
+                          <button onClick={() => { setOpenMenuId(null); openAssign(item.id); }}
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2">
+                            <UserPlus size={13} /> Asignar a paciente
                           </button>
                         </div>
-                      </KikiCard>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Favoritos */}
-            {activeTab === 3 && (
-              favoriteExercises.length === 0 ? (
-                <div className="flex flex-col items-center py-12 text-center">
-                  <Heart size={32} className="text-muted-foreground mb-3" />
-                  <h3 className="font-semibold">Sin favoritos</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Guardá ejercicios de la comunidad tocando el ❤️</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {favoriteExercises.map(item => (
-                    <CommunityCard key={item.id} item={item} isFav={true}
-                      onToggleFav={() => toggleFavorite(item.id)} onClick={() => navigate(`/kine/exercise/${item.id}`)} />
+                      )}
+                    </div>
                   ))}
                 </div>
-              )
+              </div>
             )}
           </>
         )}
@@ -417,29 +482,108 @@ export default function ExerciseLibraryScreen() {
 
 
 
-      {/* Assign to patient modal */}
-      {showAssignModal && (
+      {/* Delete confirmation dialog */}
+      {deleteTarget && (
         <div className="fixed inset-0 bg-foreground/40 flex items-center justify-center z-[60] px-6">
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
             className="bg-card rounded-xl p-6 w-full max-w-[320px] shadow-kiki-lg">
-            <h3 className="font-semibold text-center mb-4">Asignar a paciente</h3>
-            {patients.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center mb-4">No tenés pacientes vinculados.</p>
-            ) : (
-              <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
-                {patients.map(p => (
-                  <button key={p.childId} onClick={() => handleAssignExercise(showAssignModal, p.childId)}
-                    disabled={assigningTo === p.childId}
-                    className="w-full text-left px-3 py-2.5 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-sm font-medium disabled:opacity-50">
-                    {p.childName}
-                    {assigningTo === p.childId && <span className="text-xs text-muted-foreground ml-2">Asignando...</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-            <button onClick={() => setShowAssignModal(null)} className="btn-ghost w-full text-sm">Cancelar</button>
+            <h3 className="font-bold text-center text-base mb-2">¿Eliminar este ejercicio?</h3>
+            <p className="text-sm text-muted-foreground text-center mb-5">
+              Esta acción no se puede deshacer. Si el ejercicio está asignado a pacientes activos, se eliminará de sus planes futuros.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteTarget(null)} className="btn-secondary flex-1 text-sm">Cancelar</button>
+              <button onClick={() => handleDeleteExercise(deleteTarget)}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 transition-colors">
+                Eliminar
+              </button>
+            </div>
           </motion.div>
         </div>
+      )}
+
+      {/* Assign to patient modal (two steps) */}
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-foreground/40 flex items-center justify-center z-[60] px-6">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            className="bg-card rounded-xl p-5 w-full max-w-[340px] shadow-kiki-lg">
+
+            {assignStep === 1 && (
+              <>
+                <div className="flex items-center gap-2 mb-4">
+                  <h3 className="font-semibold flex-1">Elegir paciente</h3>
+                  <button onClick={() => setShowAssignModal(null)}><X size={18} className="text-muted-foreground" /></button>
+                </div>
+                <div className="relative mb-3">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input className="input-kiki text-sm pl-8" placeholder="Buscar paciente…" value={patientSearch} onChange={e => setPatientSearch(e.target.value)} />
+                </div>
+                {patients.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">No tenés pacientes vinculados.</p>
+                ) : (
+                  <div className="space-y-2 max-h-56 overflow-y-auto">
+                    {patients.filter(p => p.childName.toLowerCase().includes(patientSearch.toLowerCase())).map(p => (
+                      <button key={p.childId} onClick={() => { setAssignPatient(p); setAssignStep(2); }}
+                        className="w-full text-left px-3 py-2.5 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-sm font-medium flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-mint flex items-center justify-center text-navy font-bold text-xs shrink-0">
+                          {p.childName[0]}
+                        </div>
+                        {p.childName}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {assignStep === 2 && assignPatient && (
+              <>
+                <div className="flex items-center gap-2 mb-4">
+                  <button onClick={() => setAssignStep(1)} className="text-muted-foreground">
+                    <ArrowLeft size={16} />
+                  </button>
+                  <h3 className="font-semibold flex-1 text-sm">Agregar al plan de {assignPatient.childName}</h3>
+                </div>
+                
+                <div className="space-y-4 mb-5">
+                  <div>
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Fecha del plan</label>
+                    <input type="date" value={assignDate} onChange={e => setAssignDate(e.target.value)} 
+                      className="input-kiki text-sm font-medium" />
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-mint-50/50 border border-mint-100">
+                    <p className="text-[10px] font-bold text-mint-700 uppercase mb-2">Ya planificados para esta fecha:</p>
+                    {existingExercisesOnDate.length > 0 ? (
+                      <div className="space-y-1">
+                        {existingExercisesOnDate.map((ex, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-xs font-medium text-navy">
+                            <CheckCircle2 size={12} className="text-mint-600" /> {ex.exercises?.name}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground italic">No hay ejercicios asignados aún.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button onClick={() => setShowAssignModal(null)} className="btn-ghost flex-1 text-sm">Cancelar</button>
+                  <button onClick={handleAssignExercise} disabled={!!assigningTo}
+                    className="btn-primary flex-1 text-sm disabled:opacity-50">
+                    {assigningTo ? 'Agregando...' : 'Agregar al plan'}
+                  </button>
+                </div>
+              </>
+            )}
+          </motion.div>
+        </div>
+      )}
+
+      {/* Overlay to close any open context menu */}
+      {openMenuId && (
+        <div className="fixed inset-0 z-40" onClick={() => setOpenMenuId(null)} />
       )}
     </AppShell>
   );

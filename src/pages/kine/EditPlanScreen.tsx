@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, X, Check, Save, ChevronUp, ChevronDown, Search } from 'lucide-react';
-// Components
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, Plus, X, Check, Save, ChevronUp, ChevronDown, Search, Heart } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -37,10 +37,17 @@ export default function EditPlanScreen() {
   const [childName, setChildName] = useState('');
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
   const [availableExercises, setAvailableExercises] = useState<ExerciseOption[]>([]);
-  const [searchEx, setSearchEx] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Bottom sheet state
+  const [showSheet, setShowSheet] = useState(false);
+  const [sheetSearch, setSheetSearch] = useState('');
+  const [sheetTab, setSheetTab] = useState<0 | 1 | 2>(0);
+  const [savedExercises, setSavedExercises] = useState<ExerciseOption[]>([]);
+  const [communityExercises, setCommunityExercises] = useState<ExerciseOption[]>([]);
+  const [selectedSheetExId, setSelectedSheetExId] = useState<string | null>(null);
+  const [sheetExDetail, setSheetExDetail] = useState<any | null>(null);
 
   useEffect(() => {
     if (user && linkId) loadPlan();
@@ -70,6 +77,21 @@ export default function EditPlanScreen() {
       .select('id, name, duration, sets, reps, target_area')
       .eq('created_by', user.id);
 
+    setSavedExercises(savedExList);
+
+    // Get community exercises
+    const { data: commEx } = await supabase.from('community_exercises')
+      .select('id, clinical_name, area, author_name');
+    const commExList: ExerciseOption[] = (commEx || []).map(e => ({
+      id: e.id,
+      name: e.clinical_name,
+      duration: 5,
+      sets: 3,
+      reps: '10 repeticiones',
+      target_area: e.area,
+    }));
+    setCommunityExercises(commExList);
+
     const exList = exercises || [];
     setAvailableExercises(exList);
 
@@ -96,7 +118,10 @@ export default function EditPlanScreen() {
   };
 
   const addExercise = (ex: ExerciseOption) => {
-    if (planItems.some(p => p.exerciseId === ex.id)) return;
+    if (planItems.some(p => p.exerciseId === ex.id)) {
+      toast('Este ejercicio ya está en el plan');
+      return;
+    }
     setPlanItems(prev => [...prev, {
       exerciseId: ex.id,
       exerciseName: ex.name,
@@ -106,7 +131,22 @@ export default function EditPlanScreen() {
       targetArea: ex.target_area,
       dayOfWeek: [1, 2, 3, 4, 5],
     }]);
-    setSearchEx('');
+    setShowSheet(false);
+    setSelectedSheetExId(null);
+    toast.success(`"${ex.name}" agregado al plan`);
+  };
+
+  const loadSheetExDetail = async (id: string) => {
+    setSelectedSheetExId(id);
+    setSheetExDetail(null);
+    let { data } = await supabase.from('exercises').select('*').eq('id', id).single();
+    if (!data) {
+      const { data: commData } = await supabase.from('community_exercises').select('*').eq('id', id).single();
+      if (commData) {
+        data = { ...commData, name: commData.clinical_name, target_area: commData.area, description: commData.instructions || commData.description };
+      }
+    }
+    setSheetExDetail(data);
   };
 
   const removeExercise = (exId: string) => setPlanItems(prev => prev.filter(p => p.exerciseId !== exId));
@@ -164,9 +204,13 @@ export default function EditPlanScreen() {
     }
   };
 
-  const filteredAvailable = availableExercises.filter(e =>
+  const sheetExercises = (
+    sheetTab === 0 ? availableExercises
+    : sheetTab === 1 ? savedExercises
+    : communityExercises
+  ).filter(e =>
     !planItems.some(p => p.exerciseId === e.id) &&
-    e.name.toLowerCase().includes(searchEx.toLowerCase())
+    e.name.toLowerCase().includes(sheetSearch.toLowerCase())
   );
 
   if (saved) {
@@ -256,31 +300,11 @@ export default function EditPlanScreen() {
           )}
         </div>
 
-        {/* Search exercises */}
-        <div>
-          <label className="text-xs font-medium block mb-1.5">Agregar ejercicio</label>
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input className="input-kiki text-sm pl-9" placeholder="Buscar ejercicio…" value={searchEx} onChange={e => setSearchEx(e.target.value)} />
-          </div>
-          {searchEx && filteredAvailable.length > 0 && (
-            <div className="bg-card border border-border rounded-xl mt-1 shadow-kiki max-h-40 overflow-y-auto">
-              {filteredAvailable.slice(0, 5).map(ex => (
-                <button key={ex.id} onClick={() => addExercise(ex)} className="w-full text-left px-3 py-2 text-sm hover:bg-muted border-b border-border last:border-0">
-                  <p className="font-medium text-xs">{ex.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{ex.target_area || ''} {ex.duration ? `· ${ex.duration}min` : ''}</p>
-                </button>
-              ))}
-            </div>
-          )}
-          {searchEx && filteredAvailable.length === 0 && (
-            <p className="text-xs text-muted-foreground mt-1">Sin resultados. Creá ejercicios en la Biblioteca.</p>
-          )}
-
-          <button onClick={() => navigate('/kine/exercises')} className="btn-ghost text-xs mt-2 w-full text-mint-600">
-            <Plus size={12} className="inline mr-1" /> Buscar en biblioteca
-          </button>
-        </div>
+        {/* Add exercise — opens bottom sheet */}
+        <button onClick={() => { setShowSheet(true); setSheetSearch(''); setSheetTab(0); }}
+          className="btn-secondary w-full text-sm flex items-center justify-center gap-2">
+          <Plus size={14} /> Agregar ejercicio
+        </button>
       </div>
 
       <div className="sticky bottom-0 p-4 bg-background border-t border-border space-y-2">
@@ -289,6 +313,108 @@ export default function EditPlanScreen() {
         </button>
         <button onClick={() => navigate(-1)} className="btn-ghost w-full text-xs">Cancelar</button>
       </div>
+
+      {/* Bottom Sheet — Exercise Library */}
+      <AnimatePresence>
+        {showSheet && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-foreground/40 z-40" onClick={() => setShowSheet(false)} />
+            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 z-50 bg-background rounded-t-2xl shadow-xl"
+              style={{ height: '75vh' }}>
+              {/* Sheet header */}
+              <div className="flex items-center px-4 pt-4 pb-3 border-b border-border">
+                <h3 className="font-semibold flex-1">Agregar ejercicio</h3>
+                <button onClick={() => setShowSheet(false)} className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                  <X size={16} />
+                </button>
+              </div>
+              {/* Exercise list or Detail */}
+              <div className="flex-1 overflow-y-auto px-4 pb-6">
+                {!selectedSheetExId ? (
+                  <>
+                    {/* Tabs */}
+                    <div className="flex gap-1 pt-3 pb-2">
+                      {['Propios', 'Guardados', 'Comunidad'].map((tab, i) => (
+                        <button key={tab} onClick={() => setSheetTab(i as 0 | 1 | 2)}
+                          className={`text-[10px] px-3 py-1.5 rounded-full font-bold transition-colors ${sheetTab === i ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}>
+                          {tab}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Search */}
+                    <div className="pb-2">
+                      <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <input className="input-kiki text-sm pl-9" placeholder="Buscar ejercicio…"
+                          value={sheetSearch} onChange={e => setSheetSearch(e.target.value)} />
+                      </div>
+                    </div>
+                    {sheetExercises.length === 0 ? (
+                      <div className="text-center py-8">
+                        <p className="text-sm text-muted-foreground">No se encontraron ejercicios.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {sheetExercises.map(ex => (
+                          <button key={ex.id} onClick={() => loadSheetExDetail(ex.id)}
+                            className="w-full text-left p-3 rounded-xl border border-border bg-card hover:border-mint-300 hover:bg-mint-50/30 transition-colors flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-mint-50 flex items-center justify-center text-lg shrink-0">🏋️</div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{ex.name}</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {ex.target_area || 'General'}{ex.duration ? ` · ${ex.duration}min` : ''}
+                              </p>
+                            </div>
+                            <Plus size={16} className="text-mint-600 shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="py-2 space-y-4">
+                    <button onClick={() => setSelectedSheetExId(null)} className="text-xs font-bold text-mint-700 flex items-center gap-1">
+                      <ArrowLeft size={14} /> Volver al listado
+                    </button>
+                    
+                    {!sheetExDetail ? (
+                      <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-mint border-t-transparent rounded-full animate-spin" /></div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="p-4 rounded-2xl bg-muted/30 border border-border">
+                          <h4 className="text-base font-bold text-navy">{sheetExDetail.name}</h4>
+                          <p className="text-xs text-muted-foreground mt-1">{sheetExDetail.target_area || 'General'}</p>
+                          <div className="mt-3 space-y-2">
+                            <p className="text-[11px] font-bold text-muted-foreground uppercase">Instrucciones</p>
+                            <p className="text-xs leading-relaxed">{sheetExDetail.description || sheetExDetail.instructions || 'Sin instrucciones adicionales.'}</p>
+                          </div>
+                        </div>
+                        
+                        <button 
+                          onClick={() => addExercise({
+                            id: sheetExDetail.id,
+                            name: sheetExDetail.name || sheetExDetail.clinical_name,
+                            duration: sheetExDetail.duration || 5,
+                            sets: sheetExDetail.sets || 3,
+                            reps: sheetExDetail.reps || '10 repeticiones',
+                            target_area: sheetExDetail.target_area || sheetExDetail.area
+                          })}
+                          className="btn-primary w-full py-4 text-sm font-bold shadow-mint-lg"
+                        >
+                          Agregar a este plan
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
