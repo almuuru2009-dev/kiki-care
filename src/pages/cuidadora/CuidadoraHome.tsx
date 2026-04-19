@@ -102,7 +102,7 @@ export default function CuidadoraHome() {
         .eq('caregiver_id', user.id)
         .gte('completed_at', today + 'T00:00:00')
         .lte('completed_at', today + 'T23:59:59')
-        .order('completed_at', { descending: true });
+        .order('completed_at', { ascending: false });
 
       const mainSessionDone = (todaySessions || []).some(s => s && !s.is_update);
       setTodayCompleted(mainSessionDone);
