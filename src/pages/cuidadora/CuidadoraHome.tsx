@@ -51,9 +51,9 @@ export default function CuidadoraHome() {
   const [todayPlan, setTodayPlan] = useState<{ exercises: any[], totalTime: number } | null>(null);
   const [childId, setChildId] = useState<string | null>(null);
 
-  useEffect(() => {
+useEffect(() => {
     if (user) loadData();
-  }, [user, location.pathname]);
+  }, [user, location.state]);
 
   const loadData = async () => {
     if (!user) return;
