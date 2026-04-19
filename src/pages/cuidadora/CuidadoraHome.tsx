@@ -118,7 +118,7 @@ export default function CuidadoraHome() {
             .select('id')
             .eq('child_id', cid)
             .eq('active', true)
-            .or(`created_at.gt.${lastSessionTime},updated_at.gt.${lastSessionTime}`);
+            .or(`created_at.gt.${lastSessionTime}`);
           
           if (newPlans && newPlans.length > 0) {
             setHasUpdateBanner(true);
