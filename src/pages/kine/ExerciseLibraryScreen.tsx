@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, X, Star, Heart, Edit, Trash2, Users, Play, MoreVertical, UserPlus, BookmarkMinus, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Plus, Search, X as LucideX, Star, Heart, Edit, Trash2, Users, Play, MoreVertical, UserPlus, BookmarkMinus, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { KikiCard } from '@/components/kiki/KikiComponents';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
@@ -512,7 +512,7 @@ export default function ExerciseLibraryScreen() {
               <>
                 <div className="flex items-center gap-2 mb-4">
                   <h3 className="font-semibold flex-1">Elegir paciente</h3>
-                  <button onClick={() => setShowAssignModal(null)}><X size={18} className="text-muted-foreground" /></button>
+                  <button onClick={() => setShowAssignModal(null)}><LucideX size={18} className="text-muted-foreground" /></button>
                 </div>
                 <div className="relative mb-3">
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />

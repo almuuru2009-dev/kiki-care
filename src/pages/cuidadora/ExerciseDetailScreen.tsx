@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, Play, Clock, Repeat, ChevronDown, ChevronUp, 
   Info, AlertTriangle, CheckCircle2, Video, Heart, ShieldAlert,
-  Target, GraduationCap, Layers, Sparkles, Plus, Edit, Trash2, UserPlus, BookmarkMinus, MoreVertical, Search, X
+  Target, GraduationCap, Layers, Sparkles, Plus, Edit, Trash2, UserPlus, BookmarkMinus, MoreVertical, Search, X as LucideX
 } from 'lucide-react';
 import { KikiCard } from '@/components/kiki/KikiComponents';
 import { supabase } from '@/integrations/supabase/client';
@@ -483,7 +483,7 @@ export default function ExerciseDetailScreen() {
               <>
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="font-bold text-navy">Elegir paciente</h3>
-                  <button onClick={() => setShowAssignModal(false)} className="p-2 rounded-full bg-muted/50"><X size={18} /></button>
+                  <button onClick={() => setShowAssignModal(false)} className="p-2 rounded-full bg-muted/50"><LucideX size={18} /></button>
                 </div>
                 <div className="relative mb-4">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
