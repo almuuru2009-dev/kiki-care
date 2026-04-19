@@ -417,7 +417,7 @@ export default function ChildProfile() {
                     { id: 'area', options: ['Miembros inferiores', 'Miembros superiores', 'Tronco y columna', 'Control cefálico', 'Global'] },
                     { id: 'difficulty', options: ['Suave', 'Moderado', 'Intensivo'] },
                     { id: 'age', options: ['0–2 años', '2–5 años', '5–10 años', '10–18 años'] }
-                  ].find(c => c.id === activeFilter.type)?.options.map(opt => (
+                  ].find(c => c.id === activeFilter.type)?.options?.map(opt => (
                     <button 
                       key={opt}
                       onClick={() => setActiveFilter({ ...activeFilter, value: opt })}
