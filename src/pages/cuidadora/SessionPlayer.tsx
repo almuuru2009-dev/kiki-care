@@ -218,12 +218,12 @@ export default function SessionPlayer() {
 
   const continueAfterCompleted = () => {
     if (medalQueue.length > 0) setStage('medal');
-    else navigate('/cuidadora/home');
+    else navigate('/cuidadora/home', { replace: true, state: { refresh: Date.now() } });
   };
 
   const continueAfterMedal = () => {
     if (medalIdx + 1 < medalQueue.length) setMedalIdx(medalIdx + 1);
-    else navigate('/cuidadora/home');
+    else navigate('/cuidadora/home', { replace: true, state: { refresh: Date.now() } });
   };
 
   // --- RENDERS ---
