@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, Heart, PlayCircle, ChevronRight, Clock, ChevronDown, ChevronUp, Hash, ArrowRight, MessageCircle, TrendingUp, Trophy, ListChecks, AlertCircle } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
@@ -33,6 +33,7 @@ interface Appointment {
 
 export default function CuidadoraHome() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, profile } = useAuthContext();
   const firstName = (profile?.name || '').split(' ')[0] || 'Cuidador/a';
   const greetingEmoji = new Date().getHours() < 12 ? '☀️' : new Date().getHours() < 18 ? '🌤' : '🌙';
