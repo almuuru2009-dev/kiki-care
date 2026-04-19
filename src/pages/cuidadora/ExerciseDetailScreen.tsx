@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, Play, Clock, Repeat, ChevronDown, ChevronUp, 
   Info, AlertTriangle, CheckCircle2, Video, Heart, ShieldAlert,
-  Target, GraduationCap, Layers, Sparkles, Plus, Edit, Trash2, UserPlus, BookmarkMinus, MoreVertical, Search
+  Target, GraduationCap, Layers, Sparkles, Plus, Edit, Trash2, UserPlus, BookmarkMinus, MoreVertical, Search, X
 } from 'lucide-react';
 import { KikiCard } from '@/components/kiki/KikiComponents';
 import { supabase } from '@/integrations/supabase/client';

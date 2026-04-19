@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, X, Star, Heart, Edit, Trash2, Users, Play, MoreVertical, UserPlus, BookmarkMinus } from 'lucide-react';
+import { Plus, Search, X, Star, Heart, Edit, Trash2, Users, Play, MoreVertical, UserPlus, BookmarkMinus, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { KikiCard } from '@/components/kiki/KikiComponents';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
