@@ -77,7 +77,7 @@ export default function SessionPlayer() {
 
       const { data: plans } = await supabase
         .from('treatment_plans')
-        .select('exercise_id, day_of_week, created_at, updated_at')
+        .select('exercise_id, day_of_week, created_at')
         .eq('child_id', cid)
         .eq('active', true);
 
