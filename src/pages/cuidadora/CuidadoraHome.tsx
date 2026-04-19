@@ -52,7 +52,7 @@ export default function CuidadoraHome() {
 
   useEffect(() => {
     if (user) loadData();
-  }, [user]);
+  }, [user, location.pathname]);
 
   const loadData = async () => {
     if (!user) return;
