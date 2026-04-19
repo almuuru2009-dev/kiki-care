@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, X, Check, Save, ChevronUp, ChevronDown, Search, Heart, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Plus, X, Check, Save, ChevronUp, ChevronDown, Search, Heart, CheckCircle2, Video, Clock, Repeat, Edit } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { KikiCard } from '@/components/kiki/KikiComponents';
 
 const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
@@ -15,10 +16,11 @@ interface ExerciseOption {
   sets: number | null;
   reps: string | null;
   target_area: string | null;
+  created_by?: string;
 }
 
 interface PlanItem {
-  id?: string; // existing plan row id
+  id?: string;
   exerciseId: string;
   exerciseName: string;
   duration: number | null;
@@ -40,6 +42,7 @@ export default function EditPlanScreen() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  
   // Bottom sheet state
   const [showSheet, setShowSheet] = useState(false);
   const [sheetSearch, setSheetSearch] = useState('');
@@ -53,33 +56,37 @@ export default function EditPlanScreen() {
     if (user && linkId) loadPlan();
   }, [user, linkId]);
 
+  // Keep sheet open if we were editing and came back
+  useEffect(() => {
+    const wasOpen = sessionStorage.getItem('plan_sheet_open');
+    if (wasOpen === 'true') {
+      setShowSheet(true);
+      sessionStorage.removeItem('plan_sheet_open');
+    }
+  }, []);
+
   const loadPlan = async () => {
     if (!user || !linkId) return;
 
-    // Get link to find child_id
     const { data: link } = await supabase.from('therapist_caregiver_links').select('child_id').eq('id', linkId).single();
     if (!link?.child_id) { setLoading(false); return; }
     setChildId(link.child_id);
 
-    // Get child name
     const { data: child } = await supabase.from('children').select('name').eq('id', link.child_id).single();
     setChildName(child?.name || '');
 
-    // Get existing treatment plans
     const { data: plans } = await supabase.from('treatment_plans')
       .select('id, exercise_id, day_of_week, active')
       .eq('child_id', link.child_id)
       .eq('therapist_id', user.id)
       .eq('active', true);
 
-    // Get all user exercises (Propios)
     const { data: exercises } = await supabase.from('exercises')
       .select('id, name, duration, sets, reps, target_area, created_by')
       .eq('created_by', user.id);
     const exList = exercises || [];
     setAvailableExercises(exList);
 
-    // Get saved exercises
     const { data: savedEx } = await supabase.from('saved_exercises')
       .select('exercise_id')
       .eq('user_id', user.id);
@@ -87,7 +94,6 @@ export default function EditPlanScreen() {
     
     let savedExList: ExerciseOption[] = [];
     if (savedIds.length > 0) {
-      // First try community_exercises
       const { data: sCommEx } = await supabase.from('community_exercises')
         .select('id, clinical_name, area')
         .in('id', savedIds);
@@ -101,7 +107,6 @@ export default function EditPlanScreen() {
         target_area: e.area,
       }));
 
-      // Then try exercises (if they saved a private one, though less common)
       const { data: sPrivEx } = await supabase.from('exercises')
         .select('id, name, duration, sets, reps, target_area')
         .in('id', savedIds.filter(id => !commItems.some(c => c.id === id)));
@@ -119,9 +124,8 @@ export default function EditPlanScreen() {
     }
     setSavedExercises(savedExList);
 
-    // Get community exercises
     const { data: commEx } = await supabase.from('community_exercises')
-      .select('id, clinical_name, area, author_name');
+      .select('id, clinical_name, area');
     const commExList: ExerciseOption[] = (commEx || []).map(e => ({
       id: e.id,
       name: e.clinical_name,
@@ -132,9 +136,9 @@ export default function EditPlanScreen() {
     }));
     setCommunityExercises(commExList);
 
-    // Map existing plans
     if (plans && plans.length > 0) {
-      const exMap = new Map(exList.map(e => [e.id, e]));
+      const allPossibleExercises = [...exList, ...savedExList, ...commExList];
+      const exMap = new Map(allPossibleExercises.map(e => [e.id, e]));
       const items: PlanItem[] = plans.map(p => {
         const ex = exMap.get(p.exercise_id);
         return {
@@ -180,7 +184,13 @@ export default function EditPlanScreen() {
     if (!data) {
       const { data: commData } = await supabase.from('community_exercises').select('*').eq('id', id).single();
       if (commData) {
-        data = { ...commData, name: commData.clinical_name, target_area: commData.area, description: commData.instructions || commData.description };
+        data = { 
+          ...commData, 
+          name: commData.clinical_name, 
+          target_area: commData.area, 
+          instructions: commData.instructions || commData.description,
+          description: commData.instructions || commData.description
+        };
       }
     }
     setSheetExDetail(data);
@@ -213,13 +223,11 @@ export default function EditPlanScreen() {
     setSaving(true);
 
     try {
-      // Deactivate all existing plans for this child
       await supabase.from('treatment_plans')
         .update({ active: false })
         .eq('child_id', childId)
         .eq('therapist_id', user.id);
 
-      // Insert new plan items
       if (planItems.length > 0) {
         const rows = planItems.map(item => ({
           child_id: childId,
@@ -239,6 +247,11 @@ export default function EditPlanScreen() {
       toast.error('Error al guardar el plan');
       setSaving(false);
     }
+  };
+
+  const handleEditExercise = (id: string) => {
+    sessionStorage.setItem('plan_sheet_open', 'true');
+    navigate(`/kine/exercises/edit/${id}`);
   };
 
   const sheetExercises = (
@@ -283,7 +296,6 @@ export default function EditPlanScreen() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pt-4 pb-28 space-y-4">
-        {/* Current exercises */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs font-medium">Ejercicios del plan</label>
@@ -315,14 +327,13 @@ export default function EditPlanScreen() {
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium truncate">{item.exerciseName}</p>
                       <p className="text-[10px] text-muted-foreground">
-                        {item.duration ? `${item.duration}min` : ''}{item.sets ? ` · ${item.sets}×${item.reps || '10'}` : ''}
+                        {item.duration ? `${item.duration} seg` : ''}{item.sets ? ` · ${item.sets}×${item.reps || '10'}` : ''}
                       </p>
                     </div>
                     <button onClick={() => removeExercise(item.exerciseId)} className="text-muted-foreground hover:text-rust p-1">
                       <X size={14} />
                     </button>
                   </div>
-                  {/* Day selector */}
                   <div className="flex gap-1 mt-2 ml-8">
                     {dayNames.map((name, dayIdx) => (
                       <button key={dayIdx} onClick={() => toggleDay(index, dayIdx)}
@@ -337,21 +348,19 @@ export default function EditPlanScreen() {
           )}
         </div>
 
-        {/* Add exercise — opens bottom sheet */}
         <button onClick={() => { setShowSheet(true); setSheetSearch(''); setSheetTab(0); }}
-          className="btn-secondary w-full text-sm flex items-center justify-center gap-2">
+          className="btn-secondary w-full text-sm flex items-center justify-center gap-2 py-4">
           <Plus size={14} /> Agregar ejercicio
         </button>
       </div>
 
       <div className="sticky bottom-0 p-4 bg-background border-t border-border space-y-2">
-        <button onClick={handleSave} disabled={saving} className="btn-primary w-full text-sm">
-          <Save size={14} className="inline mr-1" /> {saving ? 'Guardando...' : 'Guardar plan'}
+        <button onClick={handleSave} disabled={saving} className="btn-primary w-full py-4 text-sm shadow-mint-lg">
+          <Save size={16} className="inline mr-1" /> {saving ? 'Guardando...' : 'Guardar plan'}
         </button>
         <button onClick={() => navigate(-1)} className="btn-ghost w-full text-xs">Cancelar</button>
       </div>
 
-      {/* Bottom Sheet — Exercise Library */}
       <AnimatePresence>
         {showSheet && (
           <>
@@ -359,24 +368,22 @@ export default function EditPlanScreen() {
               initial={{ opacity: 0 }} 
               animate={{ opacity: 1 }} 
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-foreground/40 z-40" 
+              className="fixed inset-0 bg-navy/40 backdrop-blur-[2px] z-40" 
               onClick={() => setShowSheet(false)} 
             />
             <motion.div 
               initial={{ y: '100%' }} 
               animate={{ y: 0 }} 
               exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 32, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 z-50 bg-background rounded-t-[2.5rem] shadow-2xl overflow-hidden flex flex-col"
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 z-50 bg-background rounded-t-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-w-[420px] mx-auto"
               style={{ height: '75vh' }}
             >
-              {/* Drag Handle */}
               <div className="w-12 h-1.5 bg-muted rounded-full mx-auto mt-4 mb-2 shrink-0" />
               
-              {/* Sheet header */}
               <div className="flex items-center px-6 py-2 shrink-0">
                 <h3 className="text-xl font-bold text-navy flex-1">
-                  {selectedSheetExId ? 'Detalle del ejercicio' : 'Agregar ejercicio'}
+                  {selectedSheetExId ? 'Detalle' : 'Biblioteca de ejercicios'}
                 </h3>
                 <button 
                   onClick={() => setShowSheet(false)} 
@@ -386,11 +393,9 @@ export default function EditPlanScreen() {
                 </button>
               </div>
 
-              {/* Sheet Content */}
               <div className="flex-1 overflow-y-auto px-6 pb-24">
                 {!selectedSheetExId ? (
                   <div className="space-y-4 pt-2">
-                    {/* Tabs */}
                     <div className="flex p-1 bg-muted rounded-2xl">
                       {['Propios', 'Guardados', 'Comunidad'].map((tab, i) => (
                         <button 
@@ -403,30 +408,27 @@ export default function EditPlanScreen() {
                       ))}
                     </div>
 
-                    {/* Search */}
                     <div className="relative group">
                       <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-mint-500 transition-colors" />
                       <input 
                         className="input-kiki pl-12 h-12 bg-muted/50 border-transparent focus:bg-background" 
-                        placeholder="Buscar ejercicio por nombre o área…"
+                        placeholder="Buscar ejercicio…"
                         value={sheetSearch} 
                         onChange={e => setSheetSearch(e.target.value)} 
                       />
                     </div>
 
-                    {/* Exercise List */}
                     {sheetExercises.length === 0 ? (
                       <div className="text-center py-12 px-4">
                         <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4 opacity-50">
                           <Search size={32} className="text-muted-foreground" />
                         </div>
-                        <p className="text-sm font-medium text-muted-foreground">No se encontraron ejercicios en esta categoría.</p>
+                        <p className="text-sm font-medium text-muted-foreground">No hay ejercicios para mostrar.</p>
                       </div>
                     ) : (
                       <div className="space-y-3 pb-4">
                         {sheetExercises.map(ex => (
-                          <motion.button 
-                            layoutId={ex.id}
+                          <button 
                             key={ex.id} 
                             onClick={() => loadSheetExDetail(ex.id)}
                             className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-mint-200 hover:bg-mint-50/20 transition-all flex items-center gap-4 group"
@@ -436,14 +438,12 @@ export default function EditPlanScreen() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-bold text-navy truncate">{ex.name}</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {ex.target_area || 'General'} · {ex.duration || 5} min
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                {ex.target_area || 'General'} · {ex.duration || 5} seg
                               </p>
                             </div>
-                            <div className="w-8 h-8 rounded-full bg-mint-100 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Plus size={18} className="text-mint-700" />
-                            </div>
-                          </motion.button>
+                            <Plus size={18} className="text-mint-400 group-hover:text-mint-700 transition-colors" />
+                          </button>
                         ))}
                       </div>
                     )}
@@ -452,15 +452,14 @@ export default function EditPlanScreen() {
                   <div className="pt-2 space-y-6">
                     <button 
                       onClick={() => setSelectedSheetExId(null)} 
-                      className="text-sm font-bold text-mint-700 flex items-center gap-2 hover:translate-x-1 transition-transform"
+                      className="text-xs font-bold text-mint-700 flex items-center gap-2 hover:translate-x-1 transition-transform"
                     >
-                      <ArrowLeft size={16} /> Volver al listado
+                      <ArrowLeft size={16} /> Volver a la biblioteca
                     </button>
                     
                     {!sheetExDetail ? (
                       <div className="flex flex-col items-center justify-center py-12 gap-4">
                         <div className="w-10 h-10 border-3 border-mint border-t-transparent rounded-full animate-spin" />
-                        <p className="text-sm text-muted-foreground animate-pulse">Cargando detalles...</p>
                       </div>
                     ) : (
                       <motion.div 
@@ -471,49 +470,44 @@ export default function EditPlanScreen() {
                         <div className="space-y-4">
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1">
-                              <h4 className="text-2xl font-bold text-navy leading-tight">{sheetExDetail.name || sheetExDetail.clinical_name}</h4>
+                              <h4 className="text-xl font-bold text-navy leading-tight">{sheetExDetail.name}</h4>
                               <div className="flex flex-wrap gap-2 mt-2">
                                 <span className="text-[10px] px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-bold border border-blue-100">
-                                  {sheetExDetail.target_area || sheetExDetail.area || 'General'}
+                                  {sheetExDetail.target_area || 'General'}
                                 </span>
-                                {sheetExDetail.gmfcs && (
-                                  <span className="text-[10px] px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-bold border border-amber-100">
-                                    GMFCS {sheetExDetail.gmfcs}
-                                  </span>
-                                )}
                               </div>
                             </div>
                             {sheetExDetail.created_by === user?.id && (
                               <button 
-                                onClick={() => navigate(`/kine/exercises/edit/${sheetExDetail.id}`)}
-                                className="px-4 py-2 rounded-xl border-2 border-mint text-mint-700 text-xs font-bold hover:bg-mint-50 transition-colors shrink-0"
+                                onClick={() => handleEditExercise(sheetExDetail.id)}
+                                className="px-3 py-2 rounded-xl border-2 border-mint text-mint-700 text-[10px] font-bold hover:bg-mint-50 transition-colors shrink-0 flex items-center gap-1"
                               >
-                                Editar
+                                <Edit size={12} /> Editar
                               </button>
                             )}
                           </div>
 
-                          <KikiCard className="!p-5 bg-muted/20 border-transparent space-y-3">
-                            <h5 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-                              <CheckCircle2 size={14} className="text-mint-600" /> Instrucciones del terapeuta
+                          <KikiCard className="!p-4 bg-muted/20 border-transparent space-y-2">
+                            <h5 className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                              <GraduationCap size={12} className="text-mint-600" /> Instrucciones
                             </h5>
-                            <p className="text-sm leading-relaxed text-navy/80 italic">
-                              "{sheetExDetail.description || sheetExDetail.instructions || 'Sin instrucciones adicionales.'}"
+                            <p className="text-xs leading-relaxed text-navy/80 whitespace-pre-line">
+                              {sheetExDetail.instructions || sheetExDetail.description || 'Sin instrucciones adicionales.'}
                             </p>
                           </KikiCard>
 
                           <div className="grid grid-cols-3 gap-3">
                             <div className="bg-card p-3 rounded-2xl border border-border text-center">
-                              <p className="text-[9px] text-muted-foreground uppercase font-bold mb-1">Duración</p>
-                              <p className="text-sm font-bold text-navy">{sheetExDetail.duration || 5} min</p>
+                              <p className="text-[8px] text-muted-foreground uppercase font-bold mb-1">Seg/Rep</p>
+                              <p className="text-xs font-bold text-navy">{sheetExDetail.duration || 5}s</p>
                             </div>
                             <div className="bg-card p-3 rounded-2xl border border-border text-center">
-                              <p className="text-[9px] text-muted-foreground uppercase font-bold mb-1">Series</p>
-                              <p className="text-sm font-bold text-navy">{sheetExDetail.sets || 3}</p>
+                              <p className="text-[8px] text-muted-foreground uppercase font-bold mb-1">Series</p>
+                              <p className="text-xs font-bold text-navy">{sheetExDetail.sets || 3}</p>
                             </div>
                             <div className="bg-card p-3 rounded-2xl border border-border text-center">
-                              <p className="text-[9px] text-muted-foreground uppercase font-bold mb-1">Reps</p>
-                              <p className="text-sm font-bold text-navy truncate px-1">{sheetExDetail.reps || '10'}</p>
+                              <p className="text-[8px] text-muted-foreground uppercase font-bold mb-1">Reps</p>
+                              <p className="text-xs font-bold text-navy truncate">{sheetExDetail.reps || '10'}</p>
                             </div>
                           </div>
                         </div>
@@ -522,11 +516,11 @@ export default function EditPlanScreen() {
                           <button 
                             onClick={() => addExercise({
                               id: sheetExDetail.id,
-                              name: sheetExDetail.name || sheetExDetail.clinical_name,
+                              name: sheetExDetail.name,
                               duration: sheetExDetail.duration || 5,
                               sets: sheetExDetail.sets || 3,
                               reps: sheetExDetail.reps || '10 repeticiones',
-                              target_area: sheetExDetail.target_area || sheetExDetail.area
+                              target_area: sheetExDetail.target_area
                             })}
                             className="btn-primary w-full py-4 text-sm font-bold shadow-mint-lg flex items-center justify-center gap-2"
                           >
