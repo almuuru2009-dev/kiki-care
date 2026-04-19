@@ -52,20 +52,19 @@ export default function SessionPlayer() {
   useEffect(() => { if (user) loadExercises(); }, [user]);
 
   const loadExercises = async () => {
-    // FIX APPLIED: Using therapist_caregiver_links to match Home screen data source
+    // FIX APPLIED: Exact sync with CuidadoraHome logic including day-of-week filtering
     if (!user) return;
     
     try {
-      // 1. Get linked child ID from links (Source of truth for family-therapist connection)
+      // 1. Get link and child_id (same as Home)
       const { data: link } = await supabase
         .from('therapist_caregiver_links')
-        .select('id, child_id')
+        .select('child_id')
         .eq('caregiver_id', user.id)
         .eq('status', 'active')
         .maybeSingle();
 
       if (!link?.child_id) {
-        console.log('No active link or child found for session');
         setLoading(false);
         return;
       }
@@ -73,10 +72,10 @@ export default function SessionPlayer() {
       const cid = link.child_id;
       setChildId(cid);
 
-      // 2. Get active treatment plans for that child
+      // 2. Fetch treatment plans (same as Home)
       const { data: plans } = await supabase
         .from('treatment_plans')
-        .select('exercise_id, created_at, updated_at')
+        .select('exercise_id, day_of_week, created_at, updated_at')
         .eq('child_id', cid)
         .eq('active', true);
 
@@ -86,10 +85,11 @@ export default function SessionPlayer() {
         return;
       }
 
-      let exerciseIds = plans.map(p => p.exercise_id);
+      const jsDay = new Date().getDay();
+      let filteredPlanItems = plans;
 
-      // Handle "isUpdate" logic (new exercises after last session today)
       if (isUpdate) {
+        // Logic for "Exercise Update" banner
         const today = new Date().toISOString().split('T')[0];
         const { data: lastSession } = await supabase
           .from('sessions')
@@ -104,16 +104,19 @@ export default function SessionPlayer() {
         
         if (lastSession) {
           const cutOff = lastSession.completed_at;
-          const newPlanIds = plans
-            .filter(p => p.created_at > cutOff || (p.updated_at && p.updated_at > cutOff))
-            .map(p => p.exercise_id);
-          exerciseIds = newPlanIds;
+          filteredPlanItems = plans.filter(p => p.created_at > cutOff || (p.updated_at && p.updated_at > cutOff));
         }
+      } else {
+        // Normal session: Filter by Today's Day of Week (Matches Home Screen)
+        filteredPlanItems = plans.filter(p => !p.day_of_week || p.day_of_week.length === 0 || p.day_of_week.includes(jsDay));
       }
+
+      const exerciseIds = filteredPlanItems.map(p => p.exercise_id);
 
       if (exerciseIds.length > 0) {
         const { data: exData } = await supabase.from('exercises').select('*').in('id', exerciseIds);
         if (exData) {
+          // Map to local interface
           setExercises(exData.map(e => ({
             id: e.id,
             name: e.simple_name || e.name,
@@ -128,8 +131,8 @@ export default function SessionPlayer() {
       } else {
         setExercises([]);
       }
-    } catch (error) {
-      console.error('Error loading session exercises:', error);
+    } catch (err) {
+      console.error('Error loading session:', err);
       toast.error('Error al cargar la sesión');
     } finally {
       setLoading(false);
