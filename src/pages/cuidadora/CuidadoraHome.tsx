@@ -81,7 +81,7 @@ export default function CuidadoraHome() {
 
       if (plans && plans.length > 0) {
         const jsDay = new Date().getDay();
-        const todayExercises = plans.filter(p => !p.day_of_week || p.day_of_week.length === 0 || p.day_of_week.includes(jsDay === 0 ? 7 : jsDay));
+        const todayExercises = plans.filter(p => !p.day_of_week || p.day_of_week.length === 0 || p.day_of_week.includes(jsDay));
         if (todayExercises.length > 0) {
           const { data: exData } = await supabase.from('exercises').select('*').in('id', todayExercises.map(p => p.exercise_id));
           if (exData) {
