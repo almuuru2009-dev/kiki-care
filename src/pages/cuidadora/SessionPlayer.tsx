@@ -52,16 +52,43 @@ export default function SessionPlayer() {
   useEffect(() => { if (user) loadExercises(); }, [user]);
 
   const loadExercises = async () => {
+    // FIX APPLIED: Using therapist_caregiver_links to match Home screen data source
     if (!user) return;
-    const { data: children } = await supabase.from('children').select('id').eq('caregiver_id', user.id).limit(1);
-    if (!children || children.length === 0) { setLoading(false); return; }
-    const cid = children[0].id;
-    setChildId(cid);
+    
+    try {
+      // 1. Get linked child ID from links (Source of truth for family-therapist connection)
+      const { data: link } = await supabase
+        .from('therapist_caregiver_links')
+        .select('id, child_id')
+        .eq('caregiver_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle();
 
-    const { data: plans } = await supabase.from('treatment_plans').select('exercise_id, created_at, updated_at').eq('child_id', cid).eq('active', true);
-    if (plans && plans.length > 0) {
+      if (!link?.child_id) {
+        console.log('No active link or child found for session');
+        setLoading(false);
+        return;
+      }
+
+      const cid = link.child_id;
+      setChildId(cid);
+
+      // 2. Get active treatment plans for that child
+      const { data: plans } = await supabase
+        .from('treatment_plans')
+        .select('exercise_id, created_at, updated_at')
+        .eq('child_id', cid)
+        .eq('active', true);
+
+      if (!plans || plans.length === 0) {
+        setExercises([]);
+        setLoading(false);
+        return;
+      }
+
       let exerciseIds = plans.map(p => p.exercise_id);
 
+      // Handle "isUpdate" logic (new exercises after last session today)
       if (isUpdate) {
         const today = new Date().toISOString().split('T')[0];
         const { data: lastSession } = await supabase
@@ -88,16 +115,26 @@ export default function SessionPlayer() {
         const { data: exData } = await supabase.from('exercises').select('*').in('id', exerciseIds);
         if (exData) {
           setExercises(exData.map(e => ({
-            id: e.id, name: e.simple_name || e.name, sets: e.sets || 3, reps: e.reps || '10 repeticiones',
-            target_area: e.target_area, thumbnail_color: e.thumbnail_color || '#7EEDC4',
-            description: e.instructions || e.description, duration: e.duration || 5,
+            id: e.id,
+            name: e.simple_name || e.name,
+            sets: e.sets || 3,
+            reps: e.reps || '10 repeticiones',
+            target_area: e.target_area,
+            thumbnail_color: e.thumbnail_color || '#7EEDC4',
+            description: e.instructions || e.description,
+            duration: e.duration || 5,
           })));
         }
+      } else {
+        setExercises([]);
       }
+    } catch (error) {
+      console.error('Error loading session exercises:', error);
+      toast.error('Error al cargar la sesión');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
-
   const exercise = exercises[currentEx];
   const totalSets = exercise?.sets || 3;
   const isCurrentExCompleted = exercise ? completedExercises.has(exercise.id) : false;
