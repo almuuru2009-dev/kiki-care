@@ -86,7 +86,7 @@ export default function JoinScreen() {
 
     } catch (err: any) {
       console.error('Error joining:', err);
-      toast.error('Error al procesar la vinculación');
+      toast.error(`Error: ${err.message || 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }
