@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, LogOut, ChevronRight, Edit2, HelpCircle, Shield, Globe, MessageSquarePlus, UserMinus, Save, X, Trash2, AlertTriangle, Hash, Heart, ChevronDown } from 'lucide-react';
+import { Send, LogOut, ChevronRight, Edit2, HelpCircle, Shield, Globe, MessageSquarePlus, UserMinus, Save, X, Trash2, AlertTriangle, Hash, Heart, ChevronDown, Plus } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { KikiCard, AvatarCircle } from '@/components/kiki/KikiComponents';
@@ -166,6 +166,46 @@ export default function ChildProfile() {
     }
   };
 
+  const handleCreateChild = async () => {
+    if (!user || !childName) {
+      toast.error('Ingresá al menos el nombre');
+      return;
+    }
+    
+    setLoadingData(true);
+    try {
+      const { data: newChild, error } = await supabase
+        .from('children')
+        .insert({
+          name: childName,
+          age: childAge ? parseInt(childAge) : null,
+          diagnosis: childDiagnosis || null,
+          gmfcs: childGmfcs ? parseInt(childGmfcs) : null,
+          caregiver_id: user.id
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Si hay un vínculo activo con un kinesiólogo, actualizarlo con el nuevo child_id
+      if (therapistLink) {
+        await supabase
+          .from('therapist_caregiver_links')
+          .update({ child_id: newChild.id })
+          .eq('id', therapistLink.id);
+      }
+
+      setChild({ id: newChild.id, name: newChild.name, age: newChild.age, diagnosis: newChild.diagnosis, gmfcs: newChild.gmfcs });
+      toast.success('Perfil del niño creado con éxito');
+    } catch (err: any) {
+      console.error('Error creating child:', err);
+      toast.error('Error al crear perfil');
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
   const handleSaveAccount = async () => {
     if (!user) return;
     const { error } = await updateProfile({ name: editName });
@@ -302,7 +342,47 @@ export default function ChildProfile() {
         )}
 
         {!child && (
-          <motion.div variants={stagger.item}><KikiCard><p className="text-sm text-muted-foreground text-center py-4">No tenés un niño registrado aún. Tu kinesiólogo te enviará una invitación.</p></KikiCard></motion.div>
+          <motion.div variants={stagger.item}>
+            <KikiCard className="border-2 border-dashed border-mint-200 bg-mint-50/20">
+              <div className="text-center py-4">
+                <div className="w-12 h-12 rounded-full bg-mint-100 flex items-center justify-center mx-auto mb-3">
+                  <Plus size={24} className="text-mint-600" />
+                </div>
+                <h3 className="font-bold text-navy mb-1">Registrar a tu hijo/a</h3>
+                <p className="text-xs text-muted-foreground mb-6 px-4">
+                  Completá el perfil de tu hijo/a para que tu kinesiólogo pueda asignarle planes de ejercicios.
+                </p>
+                
+                <div className="space-y-3 px-2 text-left">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-bold uppercase ml-1">Nombre completo</label>
+                    <input className="input-kiki text-sm" placeholder="Ej: Juan Pérez" value={childName} onChange={e => setChildName(e.target.value)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-muted-foreground font-bold uppercase ml-1">Edad</label>
+                      <input className="input-kiki text-sm" type="number" placeholder="Ej: 5" value={childAge} onChange={e => setChildAge(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground font-bold uppercase ml-1">GMFCS (Opcional)</label>
+                      <select className="input-kiki text-sm" value={childGmfcs} onChange={e => setChildGmfcs(e.target.value)}>
+                        <option value="">Nivel</option>
+                        {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-bold uppercase ml-1">Diagnóstico (Opcional)</label>
+                    <input className="input-kiki text-sm" placeholder="Ej: PCI Espástica" value={childDiagnosis} onChange={e => setChildDiagnosis(e.target.value)} />
+                  </div>
+                  
+                  <button onClick={handleCreateChild} className="btn-primary w-full py-3 mt-2 text-sm">
+                    Crear perfil y vincular
+                  </button>
+                </div>
+              </div>
+            </KikiCard>
+          </motion.div>
         )}
 
         {/* My therapist */}

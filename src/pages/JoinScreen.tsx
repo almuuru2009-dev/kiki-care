@@ -55,11 +55,20 @@ export default function JoinScreen() {
         return;
       }
 
-      // 2. Crear vínculo
+      // 2. Buscar si el cuidador ya tiene un hijo registrado
+      const { data: existingChild } = await supabase
+        .from('children')
+        .select('id')
+        .eq('caregiver_id', user!.id)
+        .limit(1)
+        .single();
+
+      // 3. Crear vínculo
       const { error: linkErr } = await supabase.from('therapist_caregiver_links').insert({
         therapist_id: invite.kinesio_id,
         caregiver_id: user!.id,
         caregiver_email: user!.email!,
+        child_id: existingChild?.id || null,
         status: 'active',
         responded_at: new Date().toISOString(),
       });
