@@ -14,29 +14,24 @@ import { toast } from 'sonner';
 interface ExerciseDetail {
   id: string;
   name: string;
-  clinical_name?: string;
   simple_name?: string;
-  description: string | null;
+  description?: string | null;
   instructions?: string | null;
   target_area: string | null;
-  area?: string | null;
-  category?: string | null;
+  objective?: string | null;
   gmfcs?: string | null;
   age_range?: string | null;
-  evidence?: string | null;
+  evidence_level?: string | null;
   duration: number | null;
   sets: number | null;
   reps: string | null;
   video_url: string | null;
-  thumbnail_color: string | null;
   difficulty?: string;
-  good_signs?: string | null;
-  stop_signs?: string | null;
+  signs_going_well?: string | null;
+  when_to_stop?: string | null;
   indications?: string | null;
   contraindications?: string | null;
-  caregiver_precautions?: string | null;
-  variants?: string | null;
-  clinical_objective?: string | null;
+  created_by?: string;
 }
 
 export default function ExerciseDetailScreen() {
@@ -49,7 +44,6 @@ export default function ExerciseDetailScreen() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   
-  // Therapist state
   const isKine = profile?.role === 'kinesiologist';
   const [isOwn, setIsOwn] = useState(false);
   const [patients, setPatients] = useState<any[]>([]);
@@ -73,20 +67,21 @@ export default function ExerciseDetailScreen() {
   const loadExercise = async () => {
     setLoading(true);
     try {
-      // Try fetching from exercises first (private/assigned)
       let { data, error } = await supabase.from('exercises').select('*').eq('id', id).single();
       
       if (error || !data) {
-        // Try community_exercises
-        const { data: commData, error: commError } = await supabase.from('community_exercises').select('*').eq('id', id).single();
+        const { data: commData } = await supabase.from('community_exercises').select('*').eq('id', id).single();
         if (commData) {
           data = {
             ...commData,
             name: commData.clinical_name,
             simple_name: commData.simple_name,
             target_area: commData.area,
-            good_signs: commData.good_signs || null, // Assuming these columns might exist in comm too or default to null
-            stop_signs: commData.stop_signs || null,
+            objective: commData.clinical_objective || commData.category,
+            evidence_level: commData.evidence || commData.evidence_level,
+            instructions: commData.instructions || commData.description,
+            signs_going_well: commData.good_signs || commData.signs_going_well,
+            when_to_stop: commData.stop_signs || commData.when_to_stop,
           };
         }
       }
@@ -102,16 +97,6 @@ export default function ExerciseDetailScreen() {
     }
   };
 
-  useEffect(() => {
-    if (isKine) loadPatients();
-  }, [isKine]);
-
-  useEffect(() => {
-    if (showAssignModal && assignPatient && assignDate) {
-      loadExistingExercises();
-    }
-  }, [showAssignModal, assignPatient, assignDate]);
-
   const loadPatients = async () => {
     if (!user) return;
     const { data: links } = await supabase.from('therapist_caregiver_links').select('id, child_id').eq('therapist_id', user.id).eq('status', 'active');
@@ -126,11 +111,32 @@ export default function ExerciseDetailScreen() {
     }
   };
 
+  useEffect(() => {
+    if (isKine) loadPatients();
+  }, [isKine]);
+
   const loadExistingExercises = async () => {
     if (!assignPatient || !assignDate) return;
     const dayOfWeek = new Date(assignDate).getDay();
     const { data } = await supabase.from('treatment_plans').select('exercise_id, exercises(name)').eq('child_id', assignPatient.id).eq('active', true).contains('day_of_week', [dayOfWeek]);
     setExistingExercisesOnDate(data || []);
+  };
+
+  useEffect(() => {
+    if (showAssignModal && assignPatient && assignDate) {
+      loadExistingExercises();
+    }
+  }, [showAssignModal, assignPatient, assignDate]);
+
+  const checkSavedStatus = async () => {
+    if (!user || !id) return;
+    const { data } = await supabase
+      .from('saved_exercises')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('exercise_id', id)
+      .maybeSingle();
+    setIsSaved(!!data);
   };
 
   const handleAssign = async () => {
@@ -158,17 +164,6 @@ export default function ExerciseDetailScreen() {
     await supabase.from('exercises').delete().eq('id', id).eq('created_by', user.id);
     toast.success('Ejercicio eliminado');
     navigate(-1);
-  };
-
-  const checkSavedStatus = async () => {
-    if (!user || !id) return;
-    const { data } = await supabase
-      .from('saved_exercises')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('exercise_id', id)
-      .maybeSingle();
-    setIsSaved(!!data);
   };
 
   const toggleSave = async () => {
@@ -201,12 +196,25 @@ export default function ExerciseDetailScreen() {
     );
   }
 
-  const name = exercise.name || exercise.clinical_name || 'Ejercicio';
-  const clinicalName = exercise.clinical_name || exercise.name;
-  const caregiverName = exercise.simple_name || exercise.name;
-  const area = exercise.target_area || exercise.area || 'General';
-  const objective = exercise.category || exercise.clinical_objective || 'Rehabilitación';
+  const name = exercise.name || 'Ejercicio';
+  const showSimpleName = exercise.simple_name && exercise.simple_name !== exercise.name;
+  const area = exercise.target_area || 'General';
+  const objective = exercise.objective || 'Rehabilitación';
   const instructions = exercise.instructions || exercise.description || 'Seguir las indicaciones del profesional.';
+
+  const evidenceIcon = (level: string) => {
+    if (level?.includes('guide')) return '📋';
+    if (level?.includes('common')) return '👥';
+    if (level?.includes('custom')) return '✏️';
+    return '📋';
+  };
+
+  const evidenceLabel = (level: string) => {
+    if (level?.includes('guide')) return 'Guía clínica';
+    if (level?.includes('common')) return 'Práctica común';
+    if (level?.includes('custom')) return 'Adaptación';
+    return level || 'No especificado';
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-background max-w-[420px] mx-auto pb-10">
@@ -216,7 +224,10 @@ export default function ExerciseDetailScreen() {
           <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0" aria-label="Volver">
             <ArrowLeft size={20} />
           </button>
-          <h1 className="text-lg font-bold text-foreground truncate">{caregiverName}</h1>
+          <div className="min-w-0">
+            <h1 className="text-sm font-bold text-navy truncate">{name}</h1>
+            {showSimpleName && <p className="text-[10px] text-muted-foreground truncate">{exercise.simple_name}</p>}
+          </div>
         </div>
         <button 
           onClick={toggleSave}
@@ -235,7 +246,7 @@ export default function ExerciseDetailScreen() {
             <div className="flex justify-between items-start">
               <div>
                 <span className="text-[10px] font-bold text-mint-600 uppercase tracking-wider">{area}</span>
-                <h2 className="text-xl font-bold text-navy leading-tight">{caregiverName}</h2>
+                <h2 className="text-xl font-bold text-navy leading-tight">{exercise.simple_name || name}</h2>
               </div>
               <div className="bg-mint/20 text-mint-700 text-[10px] font-bold px-2 py-1 rounded-full border border-mint/20">
                 {objective.split(',')[0]}
@@ -253,8 +264,8 @@ export default function ExerciseDetailScreen() {
               <div className="flex items-center gap-2 bg-card p-2.5 rounded-xl border border-border">
                 <Clock size={16} className="text-mint-600" />
                 <div>
-                  <p className="text-xs font-bold">{exercise.duration || 5} min</p>
-                  <p className="text-[9px] text-muted-foreground uppercase">Duración total</p>
+                  <p className="text-xs font-bold">{exercise.duration || 5} seg</p>
+                  <p className="text-[9px] text-muted-foreground uppercase">Por repetición</p>
                 </div>
               </div>
             </div>
@@ -264,14 +275,14 @@ export default function ExerciseDetailScreen() {
                 <GraduationCap size={12} className="text-mint-600" /> Instrucciones para el cuidador
               </p>
               <div className="bg-white/60 p-3 rounded-xl border border-border/50">
-                <p className="text-sm text-foreground leading-relaxed">
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">
                   {instructions}
                 </p>
               </div>
             </div>
             
             <div className="flex items-center gap-2 pt-1">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase">Dificultad sugerida:</span>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase">Dificultad:</span>
               <div className="flex gap-1.5">
                 {[1, 2, 3].map(i => {
                   const diff = exercise.difficulty?.toLowerCase();
@@ -281,6 +292,7 @@ export default function ExerciseDetailScreen() {
                   );
                 })}
               </div>
+              <span className="text-[10px] font-bold text-navy ml-1 capitalize">{exercise.difficulty || 'Suave'}</span>
             </div>
           </div>
         </KikiCard>
@@ -316,105 +328,105 @@ export default function ExerciseDetailScreen() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-0.5">
                     <p className="text-[10px] text-muted-foreground uppercase font-bold">Nombre Clínico</p>
-                    <p className="text-sm font-semibold text-navy">{clinicalName}</p>
+                    <p className="text-sm font-semibold text-navy">{name}</p>
                   </div>
+                  {exercise.simple_name && (
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Nombre Cuidador</p>
+                      <p className="text-sm font-semibold text-navy">{exercise.simple_name}</p>
+                    </div>
+                  )}
                   <div className="space-y-0.5">
                     <p className="text-[10px] text-muted-foreground uppercase font-bold">Objetivo</p>
                     <p className="text-sm font-semibold text-navy">{objective}</p>
                   </div>
-                  <div className="space-y-0.5">
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold">Nivel GMFCS</p>
-                    <p className="text-sm font-semibold text-navy">{exercise.gmfcs || 'I–V'}</p>
-                  </div>
-                  <div className="space-y-0.5">
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold">Rango Etario</p>
-                    <p className="text-sm font-semibold text-navy">{exercise.age_range || 'Todas las edades'}</p>
-                  </div>
+                  {exercise.gmfcs && (
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Nivel GMFCS</p>
+                      <p className="text-sm font-semibold text-navy">{exercise.gmfcs}</p>
+                    </div>
+                  )}
+                  {exercise.age_range && (
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Rango Etario</p>
+                      <p className="text-sm font-semibold text-navy">{exercise.age_range}</p>
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Nivel de Evidencia</p>
-                    <span className="text-[10px] px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 font-bold border border-blue-200">
-                      {exercise.evidence || 'Práctica común'}
-                    </span>
+                {exercise.evidence_level && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Nivel de Evidencia</p>
+                      <span className="text-[11px] px-3 py-1.5 rounded-full bg-blue-100 text-blue-700 font-bold border border-blue-200 flex items-center gap-2">
+                        <span>{evidenceIcon(exercise.evidence_level)}</span>
+                        {evidenceLabel(exercise.evidence_level)}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
               </KikiCard>
 
               {/* Observation Section */}
               <div className="grid grid-cols-2 gap-3">
-                <KikiCard className="!p-4 bg-mint-50/30 border-mint-100 space-y-2">
-                  <div className="flex items-center gap-2 text-mint-700">
-                    <CheckCircle2 size={16} />
-                    <h4 className="text-[10px] font-bold uppercase">Señales positivas</h4>
-                  </div>
-                  <p className="text-xs text-foreground leading-relaxed">
-                    {exercise.good_signs || "Movimiento fluido y ausencia de dolor."}
-                  </p>
-                </KikiCard>
-                <KikiCard className="!p-4 bg-red-50/30 border-red-100 space-y-2">
-                  <div className="flex items-center gap-2 text-rust">
-                    <ShieldAlert size={16} />
-                    <h4 className="text-[10px] font-bold uppercase">Cuándo parar</h4>
-                  </div>
-                  <p className="text-xs text-foreground leading-relaxed">
-                    {exercise.stop_signs || "Presencia de dolor o fatiga extrema."}
-                  </p>
-                </KikiCard>
+                {exercise.signs_going_well && (
+                  <KikiCard className="!p-4 bg-mint-50/30 border-mint-100 space-y-2">
+                    <div className="flex items-center gap-2 text-mint-700">
+                      <CheckCircle2 size={16} />
+                      <h4 className="text-[10px] font-bold uppercase">Va bien si...</h4>
+                    </div>
+                    <p className="text-xs text-foreground leading-relaxed">
+                      {exercise.signs_going_well}
+                    </p>
+                  </KikiCard>
+                )}
+                {exercise.when_to_stop && (
+                  <KikiCard className="!p-4 bg-red-50/30 border-red-100 space-y-2">
+                    <div className="flex items-center gap-2 text-rust">
+                      <ShieldAlert size={16} />
+                      <h4 className="text-[10px] font-bold uppercase">Parar si...</h4>
+                    </div>
+                    <p className="text-xs text-foreground leading-relaxed">
+                      {exercise.when_to_stop}
+                    </p>
+                  </KikiCard>
+                )}
               </div>
 
               {/* Clinical Context & Safety */}
-              <KikiCard className="!p-5 space-y-4">
-                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest border-b border-border pb-2 flex items-center gap-2">
-                  <ShieldAlert size={14} className="text-rust" /> Seguridad y Contexto
-                </h3>
-                
-                <div className="space-y-3">
-                  {exercise.indications && (
-                    <div className="flex gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-mint-50 flex items-center justify-center shrink-0">
-                        <Target size={18} className="text-mint-600" />
+              {(exercise.indications || exercise.contraindications) && (
+                <KikiCard className="!p-5 space-y-4">
+                  <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest border-b border-border pb-2 flex items-center gap-2">
+                    <ShieldAlert size={14} className="text-rust" /> Seguridad y Contexto
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    {exercise.indications && (
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-mint-50 flex items-center justify-center shrink-0">
+                          <Target size={18} className="text-mint-600" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold">Indicaciones</p>
+                          <p className="text-xs text-foreground leading-relaxed">{exercise.indications}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Indicaciones</p>
-                        <p className="text-xs text-foreground leading-relaxed">{exercise.indications}</p>
-                      </div>
-                    </div>
-                  )}
+                    )}
 
-                  {exercise.contraindications && (
-                    <div className="flex gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
-                        <AlertTriangle size={18} className="text-rust" />
+                    {exercise.contraindications && (
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+                          <AlertTriangle size={18} className="text-rust" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold">Contraindicaciones</p>
+                          <p className="text-xs text-foreground leading-relaxed">{exercise.contraindications}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Contraindicaciones</p>
-                        <p className="text-xs text-foreground leading-relaxed">{exercise.contraindications}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {exercise.caregiver_precautions && (
-                    <div className="flex gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
-                        <Sparkles size={18} className="text-amber-600" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Precauciones</p>
-                        <p className="text-xs text-foreground leading-relaxed">{exercise.caregiver_precautions}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {exercise.variants && (
-                  <div className="pt-2">
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Variantes Sugeridas</p>
-                    <p className="text-xs text-foreground leading-relaxed italic">{exercise.variants}</p>
+                    )}
                   </div>
-                )}
-              </KikiCard>
+                </KikiCard>
+              )}
 
               {/* Video Reference */}
               {exercise.video_url && (
