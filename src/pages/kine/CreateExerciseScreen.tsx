@@ -38,6 +38,7 @@ function PillSelector({ options, selected, onToggle }: { options: string[]; sele
 const MAX_VIDEO_SIZE = 200 * 1024 * 1024; // 200MB
 
 export default function CreateExerciseScreen() {
+  // SCHEMA_FIX_APPLIED_V2
   const navigate = useNavigate();
   const { user } = useAuthContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -46,17 +47,17 @@ export default function CreateExerciseScreen() {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const [form, setForm] = useState({
-    clinicalName: '', caregiverName: '',
-    bodyAreas: [] as string[], objectives: [] as string[], gmfcs: [] as string[], ageRanges: [] as string[],
-    indications: '', contraindications: '', clinicalObjective: '',
-    evidenceLevel: '', reference: '',
-    instructions: '', durationPerRep: '', reps: '', difficulty: '',
-    goodSigns: '', stopSigns: '', caregiverPrecautions: '', variants: '',
+    name: '',
+    description: '',
+    target_area: [] as string[],
+    duration: '',
+    reps: '',
+    sets: 3,
   });
 
-  const toggleArr = (field: keyof typeof form, val: string) => {
-    const arr = form[field] as string[];
-    setForm(prev => ({ ...prev, [field]: arr.includes(val) ? arr.filter(v => v !== val) : [...arr, val] }));
+  const toggleArea = (val: string) => {
+    const arr = form.target_area;
+    setForm(prev => ({ ...prev, target_area: arr.includes(val) ? arr.filter(v => v !== val) : [...arr, val] }));
   };
 
   const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,11 +76,9 @@ export default function CreateExerciseScreen() {
   };
 
   const validate = (): string | null => {
-    if (!form.clinicalName.trim()) return 'El nombre clínico es obligatorio';
-    if (form.bodyAreas.length === 0) return 'Seleccioná al menos un área corporal';
-    if (form.objectives.length === 0) return 'Seleccioná al menos un objetivo funcional';
-    if (form.gmfcs.length === 0) return 'Seleccioná al menos un nivel GMFCS';
-    if (!form.instructions.trim()) return 'Las instrucciones son obligatorias';
+    if (!form.name.trim()) return 'El nombre clínico es obligatorio';
+    if (form.target_area.length === 0) return 'Seleccioná al menos un área corporal';
+    if (!form.description.trim()) return 'Las instrucciones son obligatorias';
     return null;
   };
 
@@ -110,26 +109,12 @@ export default function CreateExerciseScreen() {
 
       const { error } = await supabase.from('exercises').insert({
         created_by: user.id,
-        name: form.clinicalName,
-        simple_name: form.caregiverName || null,
-        description: form.instructions, // Use instructions as the main description
-        target_area: form.bodyAreas.join(', '),
-        category: form.objectives.join(', '),
-        gmfcs: form.gmfcs.join(', '),
-        age_range: form.ageRanges.join(', '),
-        indications: form.indications || null,
-        contraindications: form.contraindications || null,
-        clinical_objective: form.clinicalObjective || null,
-        evidence: form.evidenceLevel || null,
-        instructions: form.instructions || null,
-        duration: parseInt(form.durationPerRep) || 5,
-        sets: 3, // Default sets
+        name: form.name,
+        description: form.description,
+        target_area: form.target_area.join(', '),
+        duration: parseInt(form.duration) || 5,
+        sets: form.sets, 
         reps: form.reps || '10 repeticiones',
-        difficulty: form.difficulty || null,
-        good_signs: form.goodSigns || null,
-        stop_signs: form.stopSigns || null,
-        caregiver_precautions: form.caregiverPrecautions || null,
-        variants: form.variants || null,
         video_url: videoUrl,
         is_community: share,
       });
@@ -161,108 +146,42 @@ export default function CreateExerciseScreen() {
           <h2 className="text-sm font-semibold text-foreground">1. Identificación</h2>
           <div>
             <label className="text-xs font-medium text-foreground block mb-1">Nombre clínico del ejercicio *</label>
-            <input className="input-kiki text-sm" placeholder="Este nombre lo ves vos en el dashboard" value={form.clinicalName} onChange={e => setForm(p => ({ ...p, clinicalName: e.target.value }))} />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-foreground block mb-1">Nombre para el cuidador <span className="text-muted-foreground">(recomendado)</span></label>
-            <input className="input-kiki text-sm" placeholder="Si lo dejás vacío, verá el nombre clínico" value={form.caregiverName} onChange={e => setForm(p => ({ ...p, caregiverName: e.target.value }))} />
+            <input className="input-kiki text-sm" placeholder="Ej: Flexión de rodilla" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
           </div>
         </section>
 
         {/* 2. Classification */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">2. Clasificación clínica</h2>
+          <h2 className="text-sm font-semibold text-foreground">2. Clasificación</h2>
           <div>
             <label className="text-xs font-medium text-foreground block mb-1.5">Área corporal *</label>
-            <PillSelector options={bodyAreas} selected={form.bodyAreas} onToggle={v => toggleArr('bodyAreas', v)} />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-foreground block mb-1.5">Objetivo funcional *</label>
-            <PillSelector options={objectives} selected={form.objectives} onToggle={v => toggleArr('objectives', v)} />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-foreground block mb-1.5">Nivel GMFCS sugerido *</label>
-            <PillSelector options={gmfcsLevels} selected={form.gmfcs} onToggle={v => toggleArr('gmfcs', v)} />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-foreground block mb-1.5">Rango etario</label>
-            <PillSelector options={ageRanges} selected={form.ageRanges} onToggle={v => toggleArr('ageRanges', v)} />
+            <PillSelector options={bodyAreas} selected={form.target_area} onToggle={v => toggleArea(v)} />
           </div>
         </section>
 
-        {/* 3. Clinical context */}
+        {/* 3. Caregiver instructions */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">3. Contexto clínico</h2>
-          <div>
-            <label className="text-xs font-medium text-foreground block mb-1">Indicaciones clínicas <span className="text-muted-foreground">(opcional)</span></label>
-            <textarea className="input-kiki text-sm min-h-[60px] resize-none" value={form.indications} onChange={e => setForm(p => ({ ...p, indications: e.target.value }))} />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-foreground block mb-1">Contraindicaciones <span className="text-muted-foreground">(opcional)</span></label>
-            <textarea className="input-kiki text-sm min-h-[60px] resize-none" value={form.contraindications} onChange={e => setForm(p => ({ ...p, contraindications: e.target.value }))} />
-          </div>
-        </section>
-
-        {/* 4. Evidence */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">4. Nivel de evidencia</h2>
-          <div className="space-y-2">
-            {evidenceLevels.map(ev => (
-              <button key={ev.id} type="button" onClick={() => setForm(p => ({ ...p, evidenceLevel: ev.id }))}
-                className={`w-full text-left p-3 rounded-xl border-2 transition-colors ${form.evidenceLevel === ev.id ? 'border-mint bg-mint-50' : 'border-border bg-card'}`}>
-                <div className="flex items-center gap-2"><span className="text-lg">{ev.icon}</span><span className="text-sm font-medium">{ev.label}</span></div>
-                <p className="text-xs text-muted-foreground mt-0.5 ml-7">{ev.desc}</p>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* 5. Caregiver instructions */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">5. Instrucciones para el cuidador *</h2>
-          <textarea className="input-kiki text-sm min-h-[100px] resize-none" placeholder="Instrucciones paso a paso en lenguaje simple…" value={form.instructions} onChange={e => setForm(p => ({ ...p, instructions: e.target.value }))} />
+          <h2 className="text-sm font-semibold text-foreground">3. Instrucciones para el cuidador *</h2>
+          <textarea className="input-kiki text-sm min-h-[100px] resize-none" placeholder="Instrucciones paso a paso en lenguaje simple…" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
           <div className="flex gap-2">
             <div className="flex-1">
-              <label className="text-xs font-medium text-foreground block mb-1">Duración por rep</label>
-              <input className="input-kiki text-sm" placeholder="Ej: 30 seg" value={form.durationPerRep} onChange={e => setForm(p => ({ ...p, durationPerRep: e.target.value }))} />
+              <label className="text-xs font-medium text-foreground block mb-1">Duración (seg)</label>
+              <input className="input-kiki text-sm" placeholder="Ej: 30" value={form.duration} onChange={e => setForm(p => ({ ...p, duration: e.target.value }))} />
             </div>
             <div className="flex-1">
               <label className="text-xs font-medium text-foreground block mb-1">Repeticiones</label>
-              <input className="input-kiki text-sm" placeholder="Ej: 3" value={form.reps} onChange={e => setForm(p => ({ ...p, reps: e.target.value }))} />
+              <input className="input-kiki text-sm" placeholder="Ej: 10" value={form.reps} onChange={e => setForm(p => ({ ...p, reps: e.target.value }))} />
             </div>
           </div>
           <div>
-            <label className="text-xs font-medium text-foreground block mb-1.5">Nivel de dificultad</label>
-            <div className="space-y-2">
-              {difficultyLevels.map(d => (
-                <button key={d.id} type="button" onClick={() => setForm(p => ({ ...p, difficulty: d.id }))}
-                  className={`w-full text-left p-3 rounded-xl border-2 transition-colors ${form.difficulty === d.id ? `${d.color} border-current` : 'border-border bg-card'}`}>
-                  <p className="text-sm font-medium">{d.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{d.desc}</p>
-                </button>
-              ))}
-            </div>
+            <label className="text-xs font-medium text-foreground block mb-1">Series</label>
+            <input type="number" className="input-kiki text-sm" value={form.sets} onChange={e => setForm(p => ({ ...p, sets: parseInt(e.target.value) || 0 }))} />
           </div>
         </section>
 
-        {/* 6. Observation */}
+        {/* 4. Video */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">6. Observación</h2>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[10px] font-semibold text-mint-700 block mb-1">Señales de que va bien</label>
-              <textarea className="input-kiki text-sm min-h-[80px] resize-none" value={form.goodSigns} onChange={e => setForm(p => ({ ...p, goodSigns: e.target.value }))} />
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold text-rust block mb-1">Cuándo parar o ajustar</label>
-              <textarea className="input-kiki text-sm min-h-[80px] resize-none" value={form.stopSigns} onChange={e => setForm(p => ({ ...p, stopSigns: e.target.value }))} />
-            </div>
-          </div>
-        </section>
-
-        {/* 7. Video */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">7. Video de referencia <span className="text-muted-foreground">(recomendado)</span></h2>
+          <h2 className="text-sm font-semibold text-foreground">4. Video de referencia <span className="text-muted-foreground">(recomendado)</span></h2>
           <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideoSelect} />
           {videoFile ? (
             <div className="border-2 border-mint rounded-xl p-4 flex items-center gap-3">

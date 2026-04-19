@@ -72,11 +72,51 @@ export default function EditPlanScreen() {
       .eq('therapist_id', user.id)
       .eq('active', true);
 
-    // Get all user exercises
+    // Get all user exercises (Propios)
     const { data: exercises } = await supabase.from('exercises')
-      .select('id, name, duration, sets, reps, target_area')
+      .select('id, name, duration, sets, reps, target_area, created_by')
       .eq('created_by', user.id);
+    const exList = exercises || [];
+    setAvailableExercises(exList);
 
+    // Get saved exercises
+    const { data: savedEx } = await supabase.from('saved_exercises')
+      .select('exercise_id')
+      .eq('user_id', user.id);
+    const savedIds = (savedEx || []).map(s => s.exercise_id);
+    
+    let savedExList: ExerciseOption[] = [];
+    if (savedIds.length > 0) {
+      // First try community_exercises
+      const { data: sCommEx } = await supabase.from('community_exercises')
+        .select('id, clinical_name, area')
+        .in('id', savedIds);
+      
+      const commItems = (sCommEx || []).map(e => ({
+        id: e.id,
+        name: e.clinical_name,
+        duration: 5,
+        sets: 3,
+        reps: '10 repeticiones',
+        target_area: e.area,
+      }));
+
+      // Then try exercises (if they saved a private one, though less common)
+      const { data: sPrivEx } = await supabase.from('exercises')
+        .select('id, name, duration, sets, reps, target_area')
+        .in('id', savedIds.filter(id => !commItems.some(c => c.id === id)));
+      
+      const privItems = (sPrivEx || []).map(e => ({
+        id: e.id,
+        name: e.name,
+        duration: e.duration || 5,
+        sets: e.sets || 3,
+        reps: e.reps || '10 repeticiones',
+        target_area: e.target_area,
+      }));
+
+      savedExList = [...commItems, ...privItems];
+    }
     setSavedExercises(savedExList);
 
     // Get community exercises
@@ -91,9 +131,6 @@ export default function EditPlanScreen() {
       target_area: e.area,
     }));
     setCommunityExercises(commExList);
-
-    const exList = exercises || [];
-    setAvailableExercises(exList);
 
     // Map existing plans
     if (plans && plans.length > 0) {
@@ -318,95 +355,185 @@ export default function EditPlanScreen() {
       <AnimatePresence>
         {showSheet && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-foreground/40 z-40" onClick={() => setShowSheet(false)} />
-            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 z-50 bg-background rounded-t-2xl shadow-xl"
-              style={{ height: '75vh' }}>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-foreground/40 z-40" 
+              onClick={() => setShowSheet(false)} 
+            />
+            <motion.div 
+              initial={{ y: '100%' }} 
+              animate={{ y: 0 }} 
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 32, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 z-50 bg-background rounded-t-[2.5rem] shadow-2xl overflow-hidden flex flex-col"
+              style={{ height: '75vh' }}
+            >
+              {/* Drag Handle */}
+              <div className="w-12 h-1.5 bg-muted rounded-full mx-auto mt-4 mb-2 shrink-0" />
+              
               {/* Sheet header */}
-              <div className="flex items-center px-4 pt-4 pb-3 border-b border-border">
-                <h3 className="font-semibold flex-1">Agregar ejercicio</h3>
-                <button onClick={() => setShowSheet(false)} className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                  <X size={16} />
+              <div className="flex items-center px-6 py-2 shrink-0">
+                <h3 className="text-xl font-bold text-navy flex-1">
+                  {selectedSheetExId ? 'Detalle del ejercicio' : 'Agregar ejercicio'}
+                </h3>
+                <button 
+                  onClick={() => setShowSheet(false)} 
+                  className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-muted/80 transition-colors"
+                >
+                  <X size={20} />
                 </button>
               </div>
-              {/* Exercise list or Detail */}
-              <div className="flex-1 overflow-y-auto px-4 pb-6">
+
+              {/* Sheet Content */}
+              <div className="flex-1 overflow-y-auto px-6 pb-24">
                 {!selectedSheetExId ? (
-                  <>
+                  <div className="space-y-4 pt-2">
                     {/* Tabs */}
-                    <div className="flex gap-1 pt-3 pb-2">
+                    <div className="flex p-1 bg-muted rounded-2xl">
                       {['Propios', 'Guardados', 'Comunidad'].map((tab, i) => (
-                        <button key={tab} onClick={() => setSheetTab(i as 0 | 1 | 2)}
-                          className={`text-[10px] px-3 py-1.5 rounded-full font-bold transition-colors ${sheetTab === i ? 'bg-mint text-navy' : 'bg-muted text-muted-foreground'}`}>
+                        <button 
+                          key={tab} 
+                          onClick={() => setSheetTab(i as 0 | 1 | 2)}
+                          className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${sheetTab === i ? 'bg-background text-mint-700 shadow-sm scale-[1.02]' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
                           {tab}
                         </button>
                       ))}
                     </div>
+
                     {/* Search */}
-                    <div className="pb-2">
-                      <div className="relative">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <input className="input-kiki text-sm pl-9" placeholder="Buscar ejercicio…"
-                          value={sheetSearch} onChange={e => setSheetSearch(e.target.value)} />
-                      </div>
+                    <div className="relative group">
+                      <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-mint-500 transition-colors" />
+                      <input 
+                        className="input-kiki pl-12 h-12 bg-muted/50 border-transparent focus:bg-background" 
+                        placeholder="Buscar ejercicio por nombre o área…"
+                        value={sheetSearch} 
+                        onChange={e => setSheetSearch(e.target.value)} 
+                      />
                     </div>
+
+                    {/* Exercise List */}
                     {sheetExercises.length === 0 ? (
-                      <div className="text-center py-8">
-                        <p className="text-sm text-muted-foreground">No se encontraron ejercicios.</p>
+                      <div className="text-center py-12 px-4">
+                        <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4 opacity-50">
+                          <Search size={32} className="text-muted-foreground" />
+                        </div>
+                        <p className="text-sm font-medium text-muted-foreground">No se encontraron ejercicios en esta categoría.</p>
                       </div>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="space-y-3 pb-4">
                         {sheetExercises.map(ex => (
-                          <button key={ex.id} onClick={() => loadSheetExDetail(ex.id)}
-                            className="w-full text-left p-3 rounded-xl border border-border bg-card hover:border-mint-300 hover:bg-mint-50/30 transition-colors flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-mint-50 flex items-center justify-center text-lg shrink-0">🏋️</div>
+                          <motion.button 
+                            layoutId={ex.id}
+                            key={ex.id} 
+                            onClick={() => loadSheetExDetail(ex.id)}
+                            className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-mint-200 hover:bg-mint-50/20 transition-all flex items-center gap-4 group"
+                          >
+                            <div className="w-12 h-12 rounded-xl bg-mint-50 flex items-center justify-center text-2xl shrink-0 group-hover:scale-110 transition-transform">
+                              🏋️
+                            </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{ex.name}</p>
-                              <p className="text-[10px] text-muted-foreground">
-                                {ex.target_area || 'General'}{ex.duration ? ` · ${ex.duration}min` : ''}
+                              <p className="text-sm font-bold text-navy truncate">{ex.name}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {ex.target_area || 'General'} · {ex.duration || 5} min
                               </p>
                             </div>
-                            <Plus size={16} className="text-mint-600 shrink-0" />
-                          </button>
+                            <div className="w-8 h-8 rounded-full bg-mint-100 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Plus size={18} className="text-mint-700" />
+                            </div>
+                          </motion.button>
                         ))}
                       </div>
                     )}
-                  </>
+                  </div>
                 ) : (
-                  <div className="py-2 space-y-4">
-                    <button onClick={() => setSelectedSheetExId(null)} className="text-xs font-bold text-mint-700 flex items-center gap-1">
-                      <ArrowLeft size={14} /> Volver al listado
+                  <div className="pt-2 space-y-6">
+                    <button 
+                      onClick={() => setSelectedSheetExId(null)} 
+                      className="text-sm font-bold text-mint-700 flex items-center gap-2 hover:translate-x-1 transition-transform"
+                    >
+                      <ArrowLeft size={16} /> Volver al listado
                     </button>
                     
                     {!sheetExDetail ? (
-                      <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-mint border-t-transparent rounded-full animate-spin" /></div>
+                      <div className="flex flex-col items-center justify-center py-12 gap-4">
+                        <div className="w-10 h-10 border-3 border-mint border-t-transparent rounded-full animate-spin" />
+                        <p className="text-sm text-muted-foreground animate-pulse">Cargando detalles...</p>
+                      </div>
                     ) : (
-                      <div className="space-y-4">
-                        <div className="p-4 rounded-2xl bg-muted/30 border border-border">
-                          <h4 className="text-base font-bold text-navy">{sheetExDetail.name}</h4>
-                          <p className="text-xs text-muted-foreground mt-1">{sheetExDetail.target_area || 'General'}</p>
-                          <div className="mt-3 space-y-2">
-                            <p className="text-[11px] font-bold text-muted-foreground uppercase">Instrucciones</p>
-                            <p className="text-xs leading-relaxed">{sheetExDetail.description || sheetExDetail.instructions || 'Sin instrucciones adicionales.'}</p>
+                      <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-6"
+                      >
+                        <div className="space-y-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <h4 className="text-2xl font-bold text-navy leading-tight">{sheetExDetail.name || sheetExDetail.clinical_name}</h4>
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                <span className="text-[10px] px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-bold border border-blue-100">
+                                  {sheetExDetail.target_area || sheetExDetail.area || 'General'}
+                                </span>
+                                {sheetExDetail.gmfcs && (
+                                  <span className="text-[10px] px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-bold border border-amber-100">
+                                    GMFCS {sheetExDetail.gmfcs}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            {sheetExDetail.created_by === user?.id && (
+                              <button 
+                                onClick={() => navigate(`/kine/exercises/edit/${sheetExDetail.id}`)}
+                                className="px-4 py-2 rounded-xl border-2 border-mint text-mint-700 text-xs font-bold hover:bg-mint-50 transition-colors shrink-0"
+                              >
+                                Editar
+                              </button>
+                            )}
+                          </div>
+
+                          <KikiCard className="!p-5 bg-muted/20 border-transparent space-y-3">
+                            <h5 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                              <CheckCircle2 size={14} className="text-mint-600" /> Instrucciones del terapeuta
+                            </h5>
+                            <p className="text-sm leading-relaxed text-navy/80 italic">
+                              "{sheetExDetail.description || sheetExDetail.instructions || 'Sin instrucciones adicionales.'}"
+                            </p>
+                          </KikiCard>
+
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="bg-card p-3 rounded-2xl border border-border text-center">
+                              <p className="text-[9px] text-muted-foreground uppercase font-bold mb-1">Duración</p>
+                              <p className="text-sm font-bold text-navy">{sheetExDetail.duration || 5} min</p>
+                            </div>
+                            <div className="bg-card p-3 rounded-2xl border border-border text-center">
+                              <p className="text-[9px] text-muted-foreground uppercase font-bold mb-1">Series</p>
+                              <p className="text-sm font-bold text-navy">{sheetExDetail.sets || 3}</p>
+                            </div>
+                            <div className="bg-card p-3 rounded-2xl border border-border text-center">
+                              <p className="text-[9px] text-muted-foreground uppercase font-bold mb-1">Reps</p>
+                              <p className="text-sm font-bold text-navy truncate px-1">{sheetExDetail.reps || '10'}</p>
+                            </div>
                           </div>
                         </div>
                         
-                        <button 
-                          onClick={() => addExercise({
-                            id: sheetExDetail.id,
-                            name: sheetExDetail.name || sheetExDetail.clinical_name,
-                            duration: sheetExDetail.duration || 5,
-                            sets: sheetExDetail.sets || 3,
-                            reps: sheetExDetail.reps || '10 repeticiones',
-                            target_area: sheetExDetail.target_area || sheetExDetail.area
-                          })}
-                          className="btn-primary w-full py-4 text-sm font-bold shadow-mint-lg"
-                        >
-                          Agregar a este plan
-                        </button>
-                      </div>
+                        <div className="sticky bottom-0 bg-background pt-4 pb-2">
+                          <button 
+                            onClick={() => addExercise({
+                              id: sheetExDetail.id,
+                              name: sheetExDetail.name || sheetExDetail.clinical_name,
+                              duration: sheetExDetail.duration || 5,
+                              sets: sheetExDetail.sets || 3,
+                              reps: sheetExDetail.reps || '10 repeticiones',
+                              target_area: sheetExDetail.target_area || sheetExDetail.area
+                            })}
+                            className="btn-primary w-full py-4 text-sm font-bold shadow-mint-lg flex items-center justify-center gap-2"
+                          >
+                            <Plus size={18} /> Agregar a este plan
+                          </button>
+                        </div>
+                      </motion.div>
                     )}
                   </div>
                 )}
